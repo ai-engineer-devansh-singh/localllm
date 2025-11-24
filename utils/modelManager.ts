@@ -1,9 +1,8 @@
 import { DownloadProgress, Model } from '@/types/chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Directory, File, Paths } from 'expo-file-system';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 
-const MODELS_DIR = new Directory(Paths.document, 'models');
+const MODELS_DIR = `${FileSystem.documentDirectory}models/`;
 const ACTIVE_MODEL_KEY = '@active_model';
 const DOWNLOADED_MODELS_KEY = '@downloaded_models';
 
@@ -32,8 +31,9 @@ export const AVAILABLE_MODELS: Model[] = [
  * Initialize models directory
  */
 export async function initializeModelsDir(): Promise<void> {
-  if (!MODELS_DIR.exists) {
-    await MODELS_DIR.create();
+  const dirInfo = await FileSystem.getInfoAsync(MODELS_DIR);
+  if (!dirInfo.exists) {
+    await FileSystem.makeDirectoryAsync(MODELS_DIR, { intermediates: true });
   }
 }
 
@@ -49,22 +49,22 @@ export async function downloadModel(
   } catch (error) {
     throw new Error(`Failed to initialize models directory: ${error instanceof Error ? error.message : String(error)}`);
   }
-  
+
   if (!model.downloadUrl || model.downloadUrl.length === 0) {
     throw new Error('Invalid download URL');
   }
-  
-  if (!Paths.document || !Paths.document.uri) {
+
+  if (!FileSystem.documentDirectory) {
     throw new Error('Cannot access document directory');
   }
-  
+
   const fileName = `${model.id}.gguf`;
-  const fileUri = `${Paths.document.uri}/models/${fileName}`;
-  
+  const fileUri = `${MODELS_DIR}${fileName}`;
+
   try {
     console.log('Starting download from:', model.downloadUrl);
     console.log('Saving to:', fileUri);
-    
+
     // Report initial progress
     if (onProgress) {
       onProgress({
@@ -74,7 +74,7 @@ export async function downloadModel(
         downloadedBytes: 0,
       });
     }
-    
+
     // Create download resumable for progress tracking
     const downloadResumable = FileSystem.createDownloadResumable(
       model.downloadUrl,
@@ -82,7 +82,7 @@ export async function downloadModel(
       {},
       (downloadProgress) => {
         const { totalBytesWritten, totalBytesExpectedToWrite } = downloadProgress;
-        
+
         if (onProgress) {
           const progressData = {
             modelId: model.id,
@@ -90,29 +90,29 @@ export async function downloadModel(
             totalBytes: totalBytesExpectedToWrite,
             downloadedBytes: totalBytesWritten,
           };
-          
+
           // Log every 10% progress
           const percent = Math.round(progressData.progress * 100);
           if (percent % 10 === 0) {
-            console.log('Progress:', percent + '%', 
-                       formatBytes(totalBytesWritten), 'of', 
-                       formatBytes(totalBytesExpectedToWrite));
+            console.log('Progress:', percent + '%',
+              formatBytes(totalBytesWritten), 'of',
+              formatBytes(totalBytesExpectedToWrite));
           }
-          
+
           onProgress(progressData);
         }
       }
     );
-    
+
     console.log('Download started...');
     const result = await downloadResumable.downloadAsync();
-    
+
     if (!result) {
       throw new Error('Download failed - no result returned');
     }
-    
+
     console.log('Download complete! File saved at:', result.uri);
-    
+
     // Verify file was actually downloaded
     try {
       const fileInfo = await FileSystem.getInfoAsync(result.uri);
@@ -157,7 +157,7 @@ export async function downloadModel(
     return result.uri;
   } catch (error) {
     console.error('Download error:', error);
-    
+
     // Try to clean up partial file
     try {
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
@@ -168,7 +168,7 @@ export async function downloadModel(
     } catch (cleanupError) {
       console.error('Cleanup error:', cleanupError);
     }
-    
+
     throw error;
   }
 }
@@ -180,10 +180,10 @@ export async function getDownloadedModels(): Promise<Model[]> {
   try {
     const data = await AsyncStorage.getItem(DOWNLOADED_MODELS_KEY);
     if (!data) return [];
-    
+
     const models = JSON.parse(data) as Model[];
     if (!Array.isArray(models)) return [];
-    
+
     return models;
   } catch (error) {
     console.error('Error getting downloaded models:', error);
@@ -198,7 +198,7 @@ export async function getActiveModel(): Promise<Model | null> {
   try {
     const data = await AsyncStorage.getItem(ACTIVE_MODEL_KEY);
     if (!data) return null;
-    
+
     const model = JSON.parse(data) as Model;
     // Validate model has required fields
     if (model && model.id && model.localPath) {
@@ -218,10 +218,10 @@ export async function setActiveModel(model: Model): Promise<void> {
   if (!model || !model.id) {
     throw new Error('Invalid model');
   }
-  
+
   try {
     await AsyncStorage.setItem(ACTIVE_MODEL_KEY, JSON.stringify(model));
-    
+
     // Update downloaded models to mark this as active
     const downloadedModels = await getDownloadedModels();
     const updatedModels = downloadedModels.map((m) => ({
@@ -241,11 +241,11 @@ export async function deleteModel(modelId: string): Promise<void> {
   if (!modelId) {
     throw new Error('Model ID cannot be empty');
   }
-  
+
   try {
     const downloadedModels = await getDownloadedModels();
     const model = downloadedModels.find((m) => m.id === modelId);
-    
+
     if (model && model.localPath) {
       // Delete file with proper error handling
       try {
@@ -258,11 +258,11 @@ export async function deleteModel(modelId: string): Promise<void> {
         console.warn('Error deleting model file:', fileError);
         // Continue anyway to clean up metadata
       }
-      
+
       // Remove from list
       const filtered = downloadedModels.filter((m) => m.id !== modelId);
       await AsyncStorage.setItem(DOWNLOADED_MODELS_KEY, JSON.stringify(filtered));
-      
+
       // Clear active model if it's the one being deleted
       const activeModel = await getActiveModel();
       if (activeModel && activeModel.id === modelId) {
@@ -281,16 +281,20 @@ export async function deleteModel(modelId: string): Promise<void> {
 export async function getStorageUsed(): Promise<number> {
   const downloadedModels = await getDownloadedModels();
   let totalSize = 0;
-  
+
   for (const model of downloadedModels) {
     if (model.localPath) {
-      const modelFile = new File(model.localPath);
-      if (modelFile.exists) {
-        totalSize += modelFile.size || 0;
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(model.localPath);
+        if (fileInfo.exists) {
+          totalSize += fileInfo.size || 0;
+        }
+      } catch (e) {
+        console.warn('Error checking file size:', e);
       }
     }
   }
-  
+
   return totalSize;
 }
 

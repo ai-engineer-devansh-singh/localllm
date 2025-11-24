@@ -18,7 +18,7 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-       "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.devanshsingh2199.StickerSmash"
     },
@@ -28,7 +28,6 @@
     },
     "plugins": [
       "expo-router",
-      "llama.rn",
       [
         "expo-splash-screen",
         {
@@ -43,21 +42,16 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
-      "router": {},
+      "router": {
+        "origin": false
+      },
       "eas": {
-        "projectId": "44c0fd5c-4bd6-44b2-bea4-47899528b0f4"
+        "projectId": "3e2308f1-b6e4-4cfb-83c6-4d9ced6411de"
       }
     },
-    "owner": "devanshsingh2199",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/44c0fd5c-4bd6-44b2-bea4-47899528b0f4"
-    }
+    "owner": "devanshsingh5854"
   }
 }

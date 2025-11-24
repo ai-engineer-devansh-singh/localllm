@@ -1,6 +1,28 @@
 import { MD3DarkTheme } from 'react-native-paper';
 
 /**
+ * Colors for light and dark themes
+ */
+export const Colors = {
+  light: {
+    text: '#11181C',
+    background: '#FFFFFF',
+    tint: '#8b5cf6',
+    icon: '#687076',
+    tabIconDefault: '#687076',
+    tabIconSelected: '#8b5cf6',
+  },
+  dark: {
+    text: '#ECEDEE',
+    background: '#0F172A',
+    tint: '#8b5cf6',
+    icon: '#9BA1A6',
+    tabIconDefault: '#9BA1A6',
+    tabIconSelected: '#8b5cf6',
+  },
+};
+
+/**
  * Modern Dark Theme Configuration for Local LLM Chat App
  * Vibrant gradient-inspired colors with smooth animations
  */
@@ -14,28 +36,28 @@ export const darkTheme = {
     primaryContainer: '#7c3aed',
     onPrimary: '#FFFFFF',
     onPrimaryContainer: '#ede9fe',
-    
+
     // Secondary colors - Blue gradient
     secondary: '#3b82f6', // Modern blue
     secondaryContainer: '#2563eb',
     onSecondary: '#FFFFFF',
     onSecondaryContainer: '#dbeafe',
-    
+
     // Background colors - Deep slate
     background: '#0F172A', // Slate 900
     onBackground: '#F1F5F9', // Slate 100
-    
+
     // Surface colors - Slate variants
     surface: '#1E293B', // Slate 800
     surfaceVariant: '#334155', // Slate 700
     onSurface: '#F1F5F9',
     onSurfaceVariant: '#CBD5E1',
-    
+
     // Error colors - Modern red
     error: '#EF4444',
     onError: '#FFFFFF',
     errorContainer: '#DC2626',
-    
+
     // Other colors
     outline: '#475569',
     outlineVariant: '#334155',
@@ -52,7 +74,7 @@ export const darkTheme = {
       level4: '#334155',
       level5: '#475569',
     },
-    
+
     // Custom colors for chat - Gradient themed
     userBubble: '#8b5cf6', // Purple
     userBubbleGradient: '#7c3aed', // Darker purple
