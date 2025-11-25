@@ -3,14 +3,20 @@ import { ModelCard } from '@/components/ui/ModelCard';
 import { ThemedButton } from '@/components/ui/ThemedButton';
 import { darkTheme, spacing } from '@/constants/theme';
 import { useChatContext } from '@/contexts/ChatContext';
-import { DownloadProgress, Model } from '@/types/chat';
+import { DownloadProgress, EmbeddingModel, Model } from '@/types/chat';
 import {
-  AVAILABLE_MODELS,
-  deleteModel,
-  downloadModel,
-  formatBytes,
-  getStorageUsed,
-  setActiveModel,
+    EMBEDDING_MODELS,
+    deleteEmbeddingModel,
+    downloadEmbeddingModel,
+    getDownloadedEmbeddingModels,
+} from '@/utils/embeddingManager';
+import {
+    AVAILABLE_MODELS,
+    deleteModel,
+    downloadModel,
+    formatBytes,
+    getStorageUsed,
+    setActiveModel,
 } from '@/utils/modelManager';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -27,13 +33,24 @@ export default function ModelsScreen() {
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageUsed, setStorageUsed] = useState<number>(0);
 
+  // Embedding models state
+  const [downloadedEmbeddingModels, setDownloadedEmbeddingModels] = useState<EmbeddingModel[]>([]);
+  const [downloadingEmbedding, setDownloadingEmbedding] = useState<string | null>(null);
+  const [embeddingDownloadProgress, setEmbeddingDownloadProgress] = useState<number>(0);
+
   useEffect(() => {
     loadStorageInfo();
+    refreshEmbeddingModels();
   }, [downloadedModels]);
 
   const loadStorageInfo = async () => {
     const used = await getStorageUsed();
     setStorageUsed(used);
+  };
+
+  const refreshEmbeddingModels = async () => {
+    const models = await getDownloadedEmbeddingModels();
+    setDownloadedEmbeddingModels(models);
   };
 
   const handleDownload = async (model: Model) => {
@@ -104,12 +121,65 @@ export default function ModelsScreen() {
     }
   };
 
+  const handleDownloadEmbedding = async (model: EmbeddingModel) => {
+    try {
+      setDownloadingEmbedding(model.id);
+      setEmbeddingDownloadProgress(0);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      await downloadEmbeddingModel(model, (progress) => {
+        setEmbeddingDownloadProgress(progress);
+      });
+
+      await refreshEmbeddingModels();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Success', `${model.name} downloaded successfully`);
+    } catch (error) {
+      console.error('Embedding download error:', error);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', `Failed to download ${model.name}: ${error}`);
+    } finally {
+      setDownloadingEmbedding(null);
+      setEmbeddingDownloadProgress(0);
+    }
+  };
+
+  const handleDeleteEmbedding = async (modelId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this embedding model?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteEmbeddingModel(modelId);
+              await refreshEmbeddingModels();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert('Success', 'Embedding model deleted successfully');
+            } catch (error) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+              Alert.alert('Error', `Failed to delete embedding model: ${error}`);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const isDownloaded = (modelId: string) => {
     return downloadedModels.some((m) => m.id === modelId);
   };
 
   const isActive = (modelId: string) => {
     return activeModel?.id === modelId;
+  };
+
+  const isEmbeddingDownloaded = (modelId: string) => {
+    return downloadedEmbeddingModels.some((m) => m.id === modelId);
   };
 
   return (
@@ -139,6 +209,7 @@ export default function ModelsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.sectionTitle}>Chat Models</Text>
         {AVAILABLE_MODELS.map((model, index) => {
           const downloaded = isDownloaded(model.id);
           const active = isActive(model.id);
@@ -151,6 +222,8 @@ export default function ModelsScreen() {
               size={formatBytes(model.size)}
               isActive={active}
               isDownloaded={downloaded}
+              description={model.description}
+              category={model.category}
               index={index}
             >
               {downloading && downloadProgress && (
@@ -229,6 +302,75 @@ export default function ModelsScreen() {
             </ModelCard>
           );
         })}
+
+        <View style={styles.divider} />
+        
+        <Text style={styles.sectionTitle}>Embedding Models</Text>
+        <Text style={styles.sectionSubtitle}>
+          Required for document processing and RAG features
+        </Text>
+
+        {EMBEDDING_MODELS.map((model, index) => {
+          const downloaded = isEmbeddingDownloaded(model.id);
+          const downloading = downloadingEmbedding === model.id;
+
+          return (
+            <ModelCard
+              key={model.id}
+              name={model.name}
+              size={formatBytes(model.size)}
+              isActive={false} // Embedding models are auto-selected
+              isDownloaded={downloaded}
+              description="High-performance text embedding model for semantic search"
+              category={['embedding', 'semantic-search']}
+              index={index + AVAILABLE_MODELS.length}
+            >
+              {downloading && (
+                <Animated.View
+                  entering={FadeInUp.duration(300)}
+                  style={styles.downloadingContainer}
+                >
+                  <AnimatedProgressBar
+                    progress={embeddingDownloadProgress}
+                    showPercentage
+                  />
+                  <Text style={[styles.downloadText, { marginTop: 4 }]}>
+                    Downloading...
+                  </Text>
+                </Animated.View>
+              )}
+
+              <View style={styles.actions}>
+                {!downloaded && !downloading && (
+                  <ThemedButton
+                    title="Download"
+                    onPress={() => handleDownloadEmbedding(model)}
+                    icon={<Ionicons name="download-outline" size={18} color="#FFF" />}
+                    fullWidth
+                  />
+                )}
+                {downloading && (
+                  <ThemedButton
+                    title="Downloading..."
+                    onPress={() => {}}
+                    disabled
+                    loading
+                    fullWidth
+                  />
+                )}
+                {downloaded && (
+                  <ThemedButton
+                    title="Delete"
+                    onPress={() => handleDeleteEmbedding(model.id)}
+                    variant="danger"
+                    icon={<Ionicons name="trash-outline" size={18} color="#FFF" />}
+                    fullWidth
+                  />
+                )}
+              </View>
+            </ModelCard>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -251,16 +393,16 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
+    paddingVertical: spacing.sm,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: darkTheme.colors.secondary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -274,13 +416,13 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: '800',
     color: darkTheme.colors.onBackground,
     letterSpacing: 0.5,
   },
   storageText: {
-    fontSize: 13,
+    fontSize: 10,
     color: darkTheme.colors.onSurfaceVariant,
     marginTop: 4,
     fontWeight: '500',
@@ -289,8 +431,26 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
-    paddingBottom: Platform.OS === 'ios' ? 110 : 90,
+    padding: spacing.xl,
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: darkTheme.colors.onBackground,
+    marginBottom: spacing.md,
+    marginTop: spacing.sm,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: darkTheme.colors.onSurfaceVariant,
+    marginBottom: spacing.lg,
+    marginTop: -spacing.sm,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    marginVertical: spacing.xl,
   },
   downloadingContainer: {
     marginTop: spacing.md,
@@ -301,7 +461,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   downloadText: {
-    fontSize: 12,
+    fontSize: 10,
     color: darkTheme.colors.onSurfaceVariant,
   },
   actions: {

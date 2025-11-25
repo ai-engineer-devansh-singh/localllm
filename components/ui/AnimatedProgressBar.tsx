@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   label: {
-    fontSize: 14,
+    fontSize: 11,
     color: darkTheme.colors.onBackground,
     fontWeight: '600',
   },
   percentage: {
-    fontSize: 15,
+    fontSize: 12,
     color: darkTheme.colors.downloadProgress,
     fontWeight: '700',
   },

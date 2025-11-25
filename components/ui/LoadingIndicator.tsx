@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   dot2: {},
   dot3: {},
   text: {
-    fontSize: 14,
+    fontSize: 11,
     color: darkTheme.colors.onSurfaceVariant,
   },
 });

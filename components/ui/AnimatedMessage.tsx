@@ -4,14 +4,14 @@ import React, { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, {
-  FadeInUp,
-  FadeOutDown,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withSpring,
-  withTiming,
+    FadeInUp,
+    FadeOutDown,
+    useAnimatedStyle,
+    useSharedValue,
+    withRepeat,
+    withSequence,
+    withSpring,
+    withTiming,
 } from 'react-native-reanimated';
 
 interface AnimatedMessageProps {
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(139, 92, 246, 0.2)',
   },
   messageText: {
-    fontSize: 16,
+    fontSize: 13,
     lineHeight: 24,
     marginBottom: spacing.xs,
   },
@@ -140,13 +140,13 @@ const styles = StyleSheet.create({
     color: darkTheme.colors.onBackground,
   },
   timestamp: {
-    fontSize: 11,
+    fontSize: 9,
     color: darkTheme.colors.timestamp,
     opacity: 0.8,
     fontWeight: '500',
   },
   cursor: {
-    fontSize: 16,
+    fontSize: 13,
     color: darkTheme.colors.primary,
     fontWeight: 'bold',
   },

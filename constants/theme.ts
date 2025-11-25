@@ -102,9 +102,9 @@ export const typography = {
     lineHeight: 28,
   },
   body: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '400' as const,
-    lineHeight: 24,
+    lineHeight: 22,
   },
   caption: {
     fontSize: 12,
@@ -119,12 +119,13 @@ export const typography = {
 };
 
 export const spacing = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
+  xs: 5,
+  sm: 10,
+  md: 16,
+  lg: 20,
+  xl: 28,
+  xxl: 32,
+  xxxl: 40,
 };
 
 export const shadows = {
@@ -148,6 +149,46 @@ export const shadows = {
     shadowOpacity: 0.37,
     shadowRadius: 7.49,
     elevation: 8,
+  },
+  glow: {
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+};
+
+export const gradients = {
+  primary: ['#a78bfa', '#8b5cf6', '#7c3aed'] as const,
+  secondary: ['#60a5fa', '#3b82f6', '#2563eb'] as const,
+  accent: ['#ec4899', '#d946ef', '#a855f7'] as const,
+  background: ['#1e293b', '#0f172a', '#020617'] as const,
+  subtle: ['rgba(139, 92, 246, 0.1)', 'rgba(139, 92, 246, 0.05)', 'transparent'] as const,
+};
+
+export const animations = {
+  timing: {
+    fast: 200,
+    normal: 300,
+    slow: 500,
+  },
+  spring: {
+    damping: 15,
+    stiffness: 150,
+  },
+};
+
+export const effects = {
+  glassmorphism: {
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  blur: {
+    light: 10,
+    medium: 20,
+    heavy: 40,
   },
 };
 

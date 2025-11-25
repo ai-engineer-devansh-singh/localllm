@@ -9,21 +9,80 @@ const DOWNLOADED_MODELS_KEY = '@downloaded_models';
 // Available models for download
 // Optimized for mobile devices with smaller, efficient models
 export const AVAILABLE_MODELS: Model[] = [
+  // Smallest & Fastest - Best for low-end devices
   {
     id: 'tiny-llama',
-    name: 'TinyLlama 1.1B (Quantized, ~637MB)',
+    name: 'TinyLlama 1.1B (~637MB)',
     size: 637000000,
     downloadUrl: 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
     isDownloaded: false,
     isActive: false,
+    description: 'Smallest model, fast responses, good for basic chat',
+    category: ['general', 'fast'],
   },
   {
-    id: 'gemma-2b',
-    name: 'Gemma 2B (Quantized, ~1.6GB)',
-    size: 1600000000,
-    downloadUrl: 'https://huggingface.co/lmstudio-community/gemma-2b-it-GGUF/resolve/main/gemma-2b-it-Q4_K_M.gguf',
+    id: 'llama-3.2-1b',
+    name: 'Llama 3.2 1B (~670MB)',
+    size: 670000000,
+    downloadUrl: 'https://huggingface.co/lmstudio-community/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf',
     isDownloaded: false,
     isActive: false,
+    description: 'Latest Llama, great balance of speed and intelligence',
+    category: ['general', 'recommended'],
+  },
+
+  // Balanced - Best overall performance/size ratio
+  {
+    id: 'gemma-2-2b',
+    name: 'Gemma 2 2B (~1.4GB)',
+    size: 1400000000,
+    downloadUrl: 'https://huggingface.co/lmstudio-community/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf',
+    isDownloaded: false,
+    isActive: false,
+    description: 'Google\'s efficient model, excellent for general use',
+    category: ['general', 'recommended'],
+  },
+  {
+    id: 'qwen-2.5-1.5b',
+    name: 'Qwen 2.5 1.5B (~950MB)',
+    size: 950000000,
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
+    isDownloaded: false,
+    isActive: false,
+    description: 'Excellent multilingual support, strong reasoning',
+    category: ['multilingual', 'recommended'],
+  },
+  {
+    id: 'llama-3.2-3b',
+    name: 'Llama 3.2 3B (~1.9GB)',
+    size: 1900000000,
+    downloadUrl: 'https://huggingface.co/lmstudio-community/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
+    isDownloaded: false,
+    isActive: false,
+    description: 'Best quality for medium-sized model, highly recommended',
+    category: ['general', 'recommended'],
+  },
+
+  // Advanced - Best quality (requires more RAM)
+  {
+    id: 'phi-3.5-mini',
+    name: 'Phi-3.5 Mini 3.8B (~2.2GB)',
+    size: 2200000000,
+    downloadUrl: 'https://huggingface.co/microsoft/Phi-3.5-mini-instruct-gguf/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf',
+    isDownloaded: false,
+    isActive: false,
+    description: 'Microsoft\'s reasoning powerhouse, excellent for complex tasks',
+    category: ['reasoning', 'advanced'],
+  },
+  {
+    id: 'qwen-2.5-3b',
+    name: 'Qwen 2.5 3B (~1.9GB)',
+    size: 1900000000,
+    downloadUrl: 'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf',
+    isDownloaded: false,
+    isActive: false,
+    description: 'Strong in coding and mathematics, multilingual',
+    category: ['coding', 'multilingual', 'advanced'],
   },
 ];
 

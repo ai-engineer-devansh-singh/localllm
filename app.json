@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "stickersmash",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true
     },
@@ -39,7 +39,21 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "packagingOptions": {
+              "pickFirst": [
+                "**/libllama.so"
+              ]
+            }
+          }
+        }
+      ],
+      "./plugins/withLlamaRN.js"
     ],
     "experiments": {
       "typedRoutes": true

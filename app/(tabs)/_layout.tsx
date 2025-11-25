@@ -26,8 +26,10 @@ export default function TabLayout() {
             borderTopWidth: 1,
             borderTopColor: 'rgba(139, 92, 246, 0.2)',
             paddingTop: 8,
+            // paddingBottom: 8,
             paddingHorizontal: 16,
             elevation: 0,
+            height: 70,
           },
           tabBarLabelStyle: {
             fontSize: 11,
@@ -61,6 +63,19 @@ export default function TabLayout() {
             tabBarIcon: ({ color, size, focused }) => (
               <Ionicons 
                 name={focused ? "cube" : "cube-outline"} 
+                size={size + 2} 
+                color={color} 
+              />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="documents"
+          options={{
+            title: 'Documents',
+            tabBarIcon: ({ color, size, focused }) => (
+              <Ionicons 
+                name={focused ? "folder-open" : "folder-open-outline"} 
                 size={size + 2} 
                 color={color} 
               />

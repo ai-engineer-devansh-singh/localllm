@@ -10,6 +10,8 @@ interface ModelCardProps {
   size: string;
   isActive?: boolean;
   isDownloaded?: boolean;
+  description?: string;
+  category?: string[];
   children?: React.ReactNode;
   index?: number;
 }
@@ -19,6 +21,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({
   size,
   isActive = false,
   isDownloaded = false,
+  description,
+  category,
   children,
   index = 0,
 }) => {
@@ -49,6 +53,20 @@ export const ModelCard: React.FC<ModelCardProps> = ({
       </View>
 
       <Text style={styles.size}>{size}</Text>
+      
+      {description && (
+        <Text style={styles.description}>{description}</Text>
+      )}
+      
+      {category && category.length > 0 && (
+        <View style={styles.categoryContainer}>
+          {category.map((cat, idx) => (
+            <View key={idx} style={styles.categoryBadge}>
+              <Text style={styles.categoryText}>{cat}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {children && <View style={styles.content}>{children}</View>}
     </Animated.View>
@@ -81,7 +99,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modelName: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
     color: darkTheme.colors.onBackground,
     marginRight: spacing.sm,
@@ -101,16 +119,43 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   activeBadgeText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     color: '#FFFFFF',
     letterSpacing: 0.5,
   },
   size: {
-    fontSize: 14,
+    fontSize: 11,
     color: darkTheme.colors.onSurfaceVariant,
     marginBottom: spacing.md,
     fontWeight: '500',
+  },
+  description: {
+    fontSize: 10,
+    color: darkTheme.colors.onSurfaceVariant,
+    marginBottom: spacing.sm,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+  categoryContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  categoryBadge: {
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.4)',
+  },
+  categoryText: {
+    fontSize: 9,
+    color: darkTheme.colors.primary,
+    fontWeight: '600',
+    textTransform: 'capitalize',
   },
   content: {
     marginTop: spacing.sm,

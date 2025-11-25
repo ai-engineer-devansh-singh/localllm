@@ -4,9 +4,9 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { ActivityIndicator, Text } from 'react-native-paper';
 import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
+    useAnimatedStyle,
+    useSharedValue,
+    withSpring,
 } from 'react-native-reanimated';
 
 interface ThemedButtonProps {
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.sm,
   },
   text: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
   },

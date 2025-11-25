@@ -1,6 +1,12 @@
-import { Message, Model } from '@/types/chat';
+import { Document, Message, Model } from '@/types/chat';
+import { pickDocument } from '@/utils/documentPicker';
+import { processDocument } from '@/utils/documentProcessor';
+import { copyDocumentToAppDir, deleteDocument as deleteDocumentFile, getDocuments, saveDocument } from '@/utils/documentStorage';
+import { generateEmbedding } from '@/utils/embeddingManager';
 import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
+import { chunkText } from '@/utils/textChunker';
+import { deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 interface ChatContextType {
@@ -8,11 +14,16 @@ interface ChatContextType {
   activeModel: Model | null;
   isGenerating: boolean;
   downloadedModels: Model[];
+  documents: Document[];
+  isProcessingDocument: boolean;
   sendMessage: (content: string) => Promise<void>;
   stopGenerating: () => void;
   clearMessages: () => void;
   refreshModels: () => Promise<void>;
   setActiveModelById: (modelId: string) => Promise<void>;
+  uploadDocument: () => Promise<void>;
+  deleteDocument: (docId: string) => Promise<void>;
+  refreshDocuments: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -22,11 +33,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeModel, setActiveModel] = useState<Model | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [downloadedModels, setDownloadedModels] = useState<Model[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [isProcessingDocument, setIsProcessingDocument] = useState(false);
 
-  // Load active model and downloaded models on mount
+  // Load active model, downloaded models, and documents on mount
   useEffect(() => {
     loadInitialData();
+    loadDocuments();
+    initializeVectorStore().catch(console.error);
   }, []);
+
+  const loadDocuments = async () => {
+    try {
+      const docs = await getDocuments();
+      setDocuments(docs);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -107,6 +131,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     console.log('💬 Sending message...');
     console.log('   Active model:', activeModel.name);
     console.log('   Message:', content.substring(0, 50) + (content.length > 50 ? '...' : ''));
+
+    // RAG: Search for relevant context from documents
+    let contextPrefix = '';
+    if (documents.length > 0) {
+      try {
+        console.log('🔍 Searching documents for relevant context...');
+        const queryEmbedding = await generateEmbedding(content);
+        const similarChunks = await searchSimilarChunks(queryEmbedding, 3);
+        
+        if (similarChunks.length > 0) {
+          console.log(`Found ${similarChunks.length} relevant chunks`);
+          const context = similarChunks
+            .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
+            .join('\n\n');
+          contextPrefix = `Context from documents:\n${context}\n\nQuestion: `;
+        }
+      } catch (error) {
+        console.warn('Failed to retrieve context:', error);
+      }
+    }
     
     // Ensure model is loaded before generating
     if (!isModelLoaded() && activeModel.localPath && activeModel.localPath.length > 0) {
@@ -159,8 +203,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       console.log('🤖 Generating AI response with streaming...');
       
-      // Generate AI response with streaming
-      await generateText(content, (token: string) => {
+      // Generate AI response with streaming (prepend context if available)
+      const promptWithContext = contextPrefix + content;
+      await generateText(promptWithContext, (token: string) => {
         try {
           // Accumulate tokens
           totalTokensReceived++;
@@ -257,6 +302,93 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsGenerating(false);
   };
 
+  /**
+   * Upload and process a document for RAG
+   */
+  const uploadDocument = async () => {
+    try {
+      setIsProcessingDocument(true);
+
+      // Pick document
+      const picked = await pickDocument();
+      if (!picked) {
+        setIsProcessingDocument(false);
+        return;
+      }
+
+      console.log('Processing document:', picked.name);
+
+      // Copy to app directory
+      const localPath = await copyDocumentToAppDir(picked.uri, picked.name);
+
+      // Process document (extract text)
+      const processed = await processDocument(localPath, picked.type);
+      console.log(`Extracted ${processed.wordCount} words from ${picked.name}`);
+
+      // Chunk the text
+      const chunks = chunkText(processed.text);
+      console.log(`Created ${chunks.length} chunks`);
+
+      // Generate embeddings and store
+      console.log('Generating embeddings...');
+      for (const chunk of chunks) {
+        const embedding = await generateEmbedding(chunk.text);
+        await storeEmbedding(
+          {
+            id: `${picked.name}_${chunk.chunkIndex}`,
+            docId: picked.name,
+            text: chunk.text,
+            chunkIndex: chunk.chunkIndex,
+            embedding,
+          },
+          picked.name
+        );
+      }
+
+      // Save document metadata
+      const doc: Document = {
+        id: picked.name,
+        name: picked.name,
+        type: picked.type,
+        size: picked.size,
+        uploadDate: Date.now(),
+        chunkCount: chunks.length,
+        filePath: localPath,
+      };
+
+      await saveDocument(doc);
+      await loadDocuments();
+
+      console.log('✅ Document processed successfully');
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      throw error;
+    } finally {
+      setIsProcessingDocument(false);
+    }
+  };
+
+  /**
+   * Delete a document and its embeddings
+   */
+  const deleteDocument = async (docId: string) => {
+    try {
+      await deleteDocumentEmbeddings(docId);
+      await deleteDocumentFile(docId);
+      await loadDocuments();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Refresh documents list
+   */
+  const refreshDocuments = async () => {
+    await loadDocuments();
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -264,11 +396,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeModel,
         isGenerating,
         downloadedModels,
+        documents,
+        isProcessingDocument,
         sendMessage,
         stopGenerating,
         clearMessages,
         refreshModels,
         setActiveModelById,
+        uploadDocument,
+        deleteDocument,
+        refreshDocuments,
       }}
     >
       {children}
