@@ -12,6 +12,7 @@ import {
 } from '@/utils/embeddingManager';
 import {
     AVAILABLE_MODELS,
+    cancelDownload,
     deleteModel,
     downloadModel,
     formatBytes,
@@ -73,12 +74,29 @@ export default function ModelsScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', `${model.name} downloaded successfully`);
     } catch (error) {
+      // Ignore if cancelled (we can check error message or type if needed, but for now just log)
       console.error('Download error:', error);
+      if (error instanceof Error && error.message.includes('interrupted')) {
+         // Cancelled
+         return;
+      }
+      
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Error', `Failed to download ${model.name}: ${error}`);
     } finally {
       setDownloadingModel(null);
       setDownloadProgress(null);
+    }
+  };
+
+  const handleCancelDownload = async (modelId: string) => {
+    try {
+      await cancelDownload(modelId);
+      setDownloadingModel(null);
+      setDownloadProgress(null);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (error) {
+      console.error('Error cancelling download:', error);
     }
   };
 
@@ -258,10 +276,10 @@ export default function ModelsScreen() {
                 )}
                 {downloading && (
                   <ThemedButton
-                    title="Downloading..."
-                    onPress={() => {}}
-                    disabled
-                    loading
+                    title="Cancel Download"
+                    onPress={() => handleCancelDownload(model.id)}
+                    variant="danger"
+                    icon={<Ionicons name="close-circle-outline" size={18} color="#FFF" />}
                     fullWidth
                   />
                 )}

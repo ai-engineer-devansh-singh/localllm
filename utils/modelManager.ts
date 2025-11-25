@@ -6,6 +6,9 @@ const MODELS_DIR = `${FileSystem.documentDirectory}models/`;
 const ACTIVE_MODEL_KEY = '@active_model';
 const DOWNLOADED_MODELS_KEY = '@downloaded_models';
 
+// Store active downloads to allow cancellation
+const activeDownloads = new Map<string, FileSystem.DownloadResumable>();
+
 // Available models for download
 // Optimized for mobile devices with smaller, efficient models
 export const AVAILABLE_MODELS: Model[] = [
@@ -97,6 +100,30 @@ export async function initializeModelsDir(): Promise<void> {
 }
 
 /**
+ * Cancel an active download
+ */
+export async function cancelDownload(modelId: string): Promise<void> {
+  const downloadResumable = activeDownloads.get(modelId);
+  if (downloadResumable) {
+    try {
+      await downloadResumable.pauseAsync();
+      activeDownloads.delete(modelId);
+
+      // Clean up partial file
+      const fileName = `${modelId}.gguf`;
+      const fileUri = `${MODELS_DIR}${fileName}`;
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (fileInfo.exists) {
+        await FileSystem.deleteAsync(fileUri, { idempotent: true });
+      }
+      console.log(`Download cancelled for model ${modelId}`);
+    } catch (error) {
+      console.error(`Error cancelling download for ${modelId}:`, error);
+    }
+  }
+}
+
+/**
  * Download a model with progress tracking and validation
  */
 export async function downloadModel(
@@ -119,6 +146,11 @@ export async function downloadModel(
 
   const fileName = `${model.id}.gguf`;
   const fileUri = `${MODELS_DIR}${fileName}`;
+
+  // Check if download is already active
+  if (activeDownloads.has(model.id)) {
+    throw new Error('Download already in progress');
+  }
 
   try {
     console.log('Starting download from:', model.downloadUrl);
@@ -163,8 +195,14 @@ export async function downloadModel(
       }
     );
 
+    // Store active download
+    activeDownloads.set(model.id, downloadResumable);
+
     console.log('Download started...');
     const result = await downloadResumable.downloadAsync();
+
+    // Remove from active downloads
+    activeDownloads.delete(model.id);
 
     if (!result) {
       throw new Error('Download failed - no result returned');
@@ -216,6 +254,9 @@ export async function downloadModel(
     return result.uri;
   } catch (error) {
     console.error('Download error:', error);
+
+    // Remove from active downloads if error occurred
+    activeDownloads.delete(model.id);
 
     // Try to clean up partial file
     try {

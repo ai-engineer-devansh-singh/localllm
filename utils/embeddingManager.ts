@@ -1,13 +1,17 @@
 import { EmbeddingModel } from '@/types/chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import { initLlama, LlamaContext } from 'llama.rn';
 
 const EMBEDDING_MODEL_KEY = '@embedding_model';
 const DOWNLOADED_EMBEDDING_MODELS_KEY = '@downloaded_embedding_models';
 const MODELS_DIR = `${FileSystem.documentDirectory}models/`;
 
-// Placeholder embedding model info
-// TODO: Integrate with actual embedding model (e.g., GTE-Small-GGUF via llama.rn)
+// Store loaded embedding context
+let embeddingContext: LlamaContext | null = null;
+let isEmbeddingModelLoading = false;
+
+// Available embedding models
 export const EMBEDDING_MODELS: EmbeddingModel[] = [
     {
         id: 'gte-small',
@@ -184,40 +188,64 @@ export async function deleteEmbeddingModel(modelId: string): Promise<void> {
 }
 
 /**
- * Generate embedding for text
- * 
- * IMPORTANT: This is a PLACEHOLDER implementation using simple hashing
- * In production, this should use a real embedding model like:
- * - GTE-Small-GGUF via llama.rn
- * - On-device transformer model
- * - Or call to an embedding API
+ * Load the embedding model for inference
+ */
+export async function loadEmbeddingModel(): Promise<void> {
+    if (embeddingContext) return; // Already loaded
+    if (isEmbeddingModelLoading) return; // Loading in progress
+
+    try {
+        isEmbeddingModelLoading = true;
+        const model = await getEmbeddingModel();
+
+        if (!model || !model.localPath) {
+            // Try to find a downloaded one
+            const downloaded = await getDownloadedEmbeddingModels();
+            if (downloaded.length > 0 && downloaded[0].localPath) {
+                await saveEmbeddingModel(downloaded[0]);
+                return loadEmbeddingModel();
+            }
+            throw new Error('No embedding model available');
+        }
+
+        console.log('Loading embedding model:', model.name);
+
+        embeddingContext = await initLlama({
+            model: model.localPath,
+            use_mlock: false,
+            n_ctx: 512,
+            n_gpu_layers: 0, // CPU only for embeddings usually safer
+            embedding: true, // Enable embedding mode
+        });
+
+        console.log('Embedding model loaded successfully');
+    } catch (error) {
+        console.error('Failed to load embedding model:', error);
+        throw error;
+    } finally {
+        isEmbeddingModelLoading = false;
+    }
+}
+
+/**
+ * Generate embedding for text using local model
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-    // TODO: Replace with actual embedding generation using llama.rn or similar
-    // For now, using a simple deterministic hash-based approach for demonstration
-
-    const dimensions = 384; // Typical for small embedding models
-    const embedding = new Array(dimensions).fill(0);
-
-    // Simple hash-based pseudo-embedding (NOT suitable for production)
-    // This creates a deterministic vector based on the text content
-    for (let i = 0; i < text.length; i++) {
-        const charCode = text.charCodeAt(i);
-        const idx = (charCode * i) % dimensions;
-        embedding[idx] += charCode / 1000;
+    if (!embeddingContext) {
+        await loadEmbeddingModel();
     }
 
-    // Normalize the vector
-    const norm = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-    if (norm > 0) {
-        for (let i = 0; i < embedding.length; i++) {
-            embedding[i] /= norm;
-        }
+    if (!embeddingContext) {
+        throw new Error('Failed to initialize embedding context');
     }
 
-    console.warn('⚠️ Using placeholder embedding generation. Integrate real model for production!');
-
-    return embedding;
+    try {
+        const result = await embeddingContext.embedding(text);
+        return result.embedding;
+    } catch (error) {
+        console.error('Error generating embedding:', error);
+        throw error;
+    }
 }
 
 /**
@@ -232,4 +260,14 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     }
 
     return embeddings;
+}
+
+/**
+ * Release embedding model resources
+ */
+export async function releaseEmbeddingModel(): Promise<void> {
+    if (embeddingContext) {
+        await embeddingContext.release();
+        embeddingContext = null;
+    }
 }

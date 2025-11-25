@@ -1,9 +1,18 @@
+import { Buffer } from 'buffer';
+import * as FileSystem from 'expo-file-system';
 import { cleanText, extractTextFromFile } from './textChunker';
+
+// @ts-ignore
+// @ts-ignore
+import mammoth from 'mammoth';
+// @ts-ignore
+import * as XLSX from 'xlsx';
+
+// Set worker for PDF.js (not needed in React Native environment usually if using legacy build, but good practice to check)
+// pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
 /**
  * Document processor for extracting text from various file formats
- * Currently supports: TXT
- * TODO: Add support for PDF, DOCX, XLSX (requires additional native modules)
  */
 
 export interface ProcessedDocument {
@@ -20,38 +29,51 @@ export async function processDocument(
     fileType: string
 ): Promise<ProcessedDocument> {
     let text = '';
+    let pageCount = 0;
 
-    switch (fileType) {
-        case 'txt':
-            text = await extractTextFromFile(fileUri);
-            break;
+    try {
+        switch (fileType) {
+            case 'txt':
+                text = await extractTextFromFile(fileUri);
+                break;
 
-        case 'pdf':
-            // TODO: Implement PDF text extraction
-            // Options:
-            // 1. Use react-native-pdf with text extraction
-            // 2. Use a cloud-based API (Google Cloud Document AI, AWS Textract)
-            // 3. Convert PDF to images and use OCR
-            throw new Error('PDF processing not yet implemented. Please use TXT files for now.');
+            case 'pdf':
+                const pdfData = await FileSystem.readAsStringAsync(fileUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                const pdfBuffer = Buffer.from(pdfData, 'base64');
+                const pdfResult = await pdf(pdfBuffer);
+                text = pdfResult.text;
+                pageCount = pdfResult.numpages;
+                break;
 
-        case 'docx':
-        case 'doc':
-            // TODO: Implement Word document processing
-            // Options:
-            // 1. Use mammoth library (works in Node.js, may need React Native bridge)
-            // 2. Use cloud-based converter
-            throw new Error('Word document processing not yet implemented. Please use TXT files for now.');
+            case 'docx':
+            case 'doc':
+                const docxData = await FileSystem.readAsStringAsync(fileUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                const docxBuffer = Buffer.from(docxData, 'base64');
+                const result = await mammoth.extractRawText({ buffer: docxBuffer });
+                text = result.value;
+                break;
 
-        case 'xlsx':
-        case 'xls':
-            // TODO: Implement Excel processing
-            // Options:
-            // 1. Use exceljs (may need React Native compatibility fixes)
-            // 2. Use cloud-based converter
-            throw new Error('Excel processing not yet implemented. Please use TXT files for now.');
+            case 'xlsx':
+            case 'xls':
+                const xlsxData = await FileSystem.readAsStringAsync(fileUri, {
+                    encoding: FileSystem.EncodingType.Base64,
+                });
+                const workbook = XLSX.read(xlsxData, { type: 'base64' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                text = XLSX.utils.sheet_to_txt(worksheet);
+                break;
 
-        default:
-            throw new Error(`Unsupported file type: ${fileType}`);
+            default:
+                throw new Error(`Unsupported file type: ${fileType}`);
+        }
+    } catch (error) {
+        console.error(`Error processing ${fileType} file:`, error);
+        throw new Error(`Failed to process ${fileType} file: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Clean and normalize the text
@@ -62,6 +84,7 @@ export async function processDocument(
 
     return {
         text: cleanedText,
+        pageCount: pageCount > 0 ? pageCount : undefined,
         wordCount,
     };
 }
@@ -70,14 +93,12 @@ export async function processDocument(
  * Validate that document processing is supported for file type
  */
 export function isProcessingSupported(fileType: string): boolean {
-    // Currently only TXT is fully supported
-    return fileType === 'txt';
+    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'].includes(fileType);
 }
 
 /**
  * Get list of supported file types
  */
 export function getSupportedFileTypes(): string[] {
-    return ['txt'];
-    // TODO: Add when implemented: 'pdf', 'docx', 'doc', 'xlsx', 'xls'
+    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'];
 }
