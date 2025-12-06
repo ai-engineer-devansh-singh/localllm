@@ -7,6 +7,7 @@ import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
 import { chunkText } from '@/utils/textChunker';
 import { deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
+import { cacheSearch, formatSearchResultsForContext, getCachedSearch, performWebSearch } from '@/utils/webSearch';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
 interface ChatContextType {
@@ -16,6 +17,8 @@ interface ChatContextType {
   downloadedModels: Model[];
   documents: Document[];
   isProcessingDocument: boolean;
+  webSearchEnabled: boolean;
+  isSearching: boolean;
   sendMessage: (content: string) => Promise<void>;
   stopGenerating: () => void;
   clearMessages: () => void;
@@ -24,6 +27,7 @@ interface ChatContextType {
   uploadDocument: () => Promise<void>;
   deleteDocument: (docId: string) => Promise<void>;
   refreshDocuments: () => Promise<void>;
+  toggleWebSearch: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -35,6 +39,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [downloadedModels, setDownloadedModels] = useState<Model[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [isProcessingDocument, setIsProcessingDocument] = useState(false);
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Load active model, downloaded models, and documents on mount
   useEffect(() => {
@@ -132,8 +138,46 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     console.log('   Active model:', activeModel.name);
     console.log('   Message:', content.substring(0, 50) + (content.length > 50 ? '...' : ''));
 
-    // RAG: Search for relevant context from documents
+    // Perform web search if enabled
+    let webSearchResults: any = null;
+    if (webSearchEnabled) {
+      try {
+        console.log('🌐 Web search enabled, searching...');
+        setIsSearching(true);
+        
+        // Check cache first
+        const cached = getCachedSearch(content);
+        if (cached) {
+          console.log('   Using cached search results');
+          webSearchResults = cached;
+        } else {
+          webSearchResults = await performWebSearch(content, 3, true);
+          cacheSearch(content, webSearchResults);
+          console.log(`   Found ${webSearchResults.results.length} web results`);
+        }
+        
+        setIsSearching(false);
+      } catch (error) {
+        console.error('Web search failed:', error);
+        setIsSearching(false);
+      }
+    }
+
+    // RAG: Search for relevant context from documents and web
     let contextPrefix = '';
+    
+    // Add web search results to context
+    if (webSearchResults && webSearchResults.results.length > 0) {
+      try {
+        const searchContext = formatSearchResultsForContext(webSearchResults);
+        contextPrefix += searchContext + '\n\n';
+        console.log('✅ Added web search context');
+      } catch (error) {
+        console.warn('Failed to format web search results:', error);
+      }
+    }
+    
+    // Add document context
     if (documents.length > 0) {
       try {
         console.log('🔍 Searching documents for relevant context...');
@@ -141,15 +185,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const similarChunks = await searchSimilarChunks(queryEmbedding, 3);
         
         if (similarChunks.length > 0) {
-          console.log(`Found ${similarChunks.length} relevant chunks`);
+          console.log(`✅ Found ${similarChunks.length} relevant chunks from documents`);
           const context = similarChunks
             .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
             .join('\n\n');
-          contextPrefix = `Context from documents:\n${context}\n\nQuestion: `;
+          contextPrefix += `Context from documents:\n${context}\n\n`;
+        } else {
+          console.log('ℹ️ No relevant document chunks found');
         }
       } catch (error) {
-        console.warn('Failed to retrieve context:', error);
+        console.warn('⚠️ Failed to retrieve document context:', error);
       }
+    }
+    
+    // Prepare final prompt
+    let finalPrompt = content;
+    if (contextPrefix) {
+      finalPrompt = contextPrefix + 'User question: ' + content;
+      console.log('📝 Using context-enhanced prompt');
+    } else {
+      console.log('📝 Using direct prompt (no context)');
     }
     
     // Ensure model is loaded before generating
@@ -181,14 +236,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages((prev) => [...prev, userMessage]);
     setIsGenerating(true);
 
-    // Create placeholder message for streaming
+    // Create placeholder message for streaming with sources
     const aiMessageId = (Date.now() + 1).toString();
+    const sources = webSearchResults ? webSearchResults.results.map((r: any) => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.snippet,
+    })) : undefined;
+    
     const aiMessage: Message = {
       id: aiMessageId,
       role: 'assistant',
       content: '',
       timestamp: Date.now(),
       isStreaming: true,
+      sources,
     };
     
     setMessages((prev) => [...prev, aiMessage]);
@@ -202,11 +264,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log('🤖 Generating AI response with streaming...');
+      console.log('   Prompt:', finalPrompt.substring(0, 200) + (finalPrompt.length > 200 ? '...' : ''));
+      console.log('   Prompt length:', finalPrompt.length, 'characters');
       
-      // Generate AI response with streaming (prepend context if available)
-      const promptWithContext = contextPrefix + content;
-      await generateText(promptWithContext, (token: string) => {
+      // Generate AI response with streaming
+      await generateText(finalPrompt, (token: string) => {
         try {
+          // Log first token received
+          if (totalTokensReceived === 0) {
+            console.log('   📥 First token received!');
+          }
+          
           // Accumulate tokens
           totalTokensReceived++;
           accumulatedContent.current += token;
@@ -241,6 +309,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
       
       console.log(`   ✅ Streaming complete! Total tokens: ${totalTokensReceived}`);
+      
+      // Check if we actually got any tokens
+      if (totalTokensReceived === 0) {
+        console.warn('   ⚠️ WARNING: No tokens were generated!');
+      }
       
       // Add any remaining accumulated content
       if (accumulatedContent.current) {
@@ -389,6 +462,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await loadDocuments();
   };
 
+  const toggleWebSearch = () => {
+    setWebSearchEnabled((prev) => !prev);
+  };
+
   return (
     <ChatContext.Provider
       value={{
@@ -398,6 +475,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         downloadedModels,
         documents,
         isProcessingDocument,
+        webSearchEnabled,
+        isSearching,
         sendMessage,
         stopGenerating,
         clearMessages,
@@ -406,6 +485,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         uploadDocument,
         deleteDocument,
         refreshDocuments,
+        toggleWebSearch,
       }}
     >
       {children}

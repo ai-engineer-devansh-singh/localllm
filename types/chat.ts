@@ -4,6 +4,13 @@ export interface Message {
   content: string;
   timestamp: number;
   isStreaming?: boolean;
+  sources?: SearchSource[];
+}
+
+export interface SearchSource {
+  title: string;
+  url: string;
+  snippet?: string;
 }
 
 export interface Model {

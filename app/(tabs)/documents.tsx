@@ -5,7 +5,7 @@ import { formatBytes } from '@/utils/modelManager';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -193,6 +193,23 @@ export default function DocumentsScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* Processing Overlay */}
+      <Modal
+        transparent
+        visible={isProcessingDocument}
+        animationType="fade"
+      >
+        <View style={styles.processingOverlay}>
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color={darkTheme.colors.primary} />
+            <Text style={styles.processingTitle}>Processing Document</Text>
+            <Text style={styles.processingText}>
+              Extracting text and generating embeddings...
+            </Text>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -347,5 +364,35 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: spacing.sm,
+  },
+  processingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  processingCard: {
+    backgroundColor: darkTheme.colors.surface,
+    borderRadius: 20,
+    padding: spacing.xxxl,
+    alignItems: 'center',
+    minWidth: 280,
+    shadowColor: darkTheme.colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  processingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: darkTheme.colors.onBackground,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  processingText: {
+    fontSize: 13,
+    color: darkTheme.colors.onSurfaceVariant,
+    textAlign: 'center',
   },
 });

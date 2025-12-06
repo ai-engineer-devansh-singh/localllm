@@ -3,13 +3,9 @@ import * as FileSystem from 'expo-file-system';
 import { cleanText, extractTextFromFile } from './textChunker';
 
 // @ts-ignore
-// @ts-ignore
 import mammoth from 'mammoth';
 // @ts-ignore
 import * as XLSX from 'xlsx';
-
-// Set worker for PDF.js (not needed in React Native environment usually if using legacy build, but good practice to check)
-// pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
 /**
  * Document processor for extracting text from various file formats
@@ -38,34 +34,58 @@ export async function processDocument(
                 break;
 
             case 'pdf':
-                const pdfData = await FileSystem.readAsStringAsync(fileUri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                });
-                const pdfBuffer = Buffer.from(pdfData, 'base64');
-                const pdfResult = await pdf(pdfBuffer);
-                text = pdfResult.text;
-                pageCount = pdfResult.numpages;
-                break;
+                // PDF parsing in React Native requires native modules or cloud services
+                throw new Error(
+                    'PDF support coming soon! For now, please use TXT, DOCX, or XLSX files.'
+                );
 
             case 'docx':
             case 'doc':
-                const docxData = await FileSystem.readAsStringAsync(fileUri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                });
-                const docxBuffer = Buffer.from(docxData, 'base64');
-                const result = await mammoth.extractRawText({ buffer: docxBuffer });
-                text = result.value;
+                try {
+                    const docxData = await FileSystem.readAsStringAsync(fileUri, {
+                        encoding: FileSystem.EncodingType.Base64,
+                    });
+
+                    const binaryString = Buffer.from(docxData, 'base64');
+                    const arrayBuffer = binaryString.buffer.slice(
+                        binaryString.byteOffset,
+                        binaryString.byteOffset + binaryString.byteLength
+                    );
+
+                    const result = await mammoth.extractRawText({ arrayBuffer });
+                    text = result.value;
+
+                    if (!text || text.trim().length === 0) {
+                        throw new Error('No text content found in document');
+                    }
+                } catch (error) {
+                    console.error('DOCX processing error:', error);
+                    throw new Error(`Failed to process DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
                 break;
 
             case 'xlsx':
             case 'xls':
-                const xlsxData = await FileSystem.readAsStringAsync(fileUri, {
-                    encoding: FileSystem.EncodingType.Base64,
-                });
-                const workbook = XLSX.read(xlsxData, { type: 'base64' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                text = XLSX.utils.sheet_to_txt(worksheet);
+                try {
+                    const xlsxData = await FileSystem.readAsStringAsync(fileUri, {
+                        encoding: FileSystem.EncodingType.Base64,
+                    });
+
+                    const workbook = XLSX.read(xlsxData, { type: 'base64' });
+                    const sheets = workbook.SheetNames.map(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        return XLSX.utils.sheet_to_txt(worksheet);
+                    });
+
+                    text = sheets.join('\n\n');
+
+                    if (!text || text.trim().length === 0) {
+                        throw new Error('No text content found in spreadsheet');
+                    }
+                } catch (error) {
+                    console.error('XLSX processing error:', error);
+                    throw new Error(`Failed to process Excel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
                 break;
 
             default:
@@ -73,13 +93,10 @@ export async function processDocument(
         }
     } catch (error) {
         console.error(`Error processing ${fileType} file:`, error);
-        throw new Error(`Failed to process ${fileType} file: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
     }
 
-    // Clean and normalize the text
     const cleanedText = cleanText(text);
-
-    // Calculate word count
     const wordCount = cleanedText.split(/\s+/).filter(word => word.length > 0).length;
 
     return {
@@ -93,12 +110,12 @@ export async function processDocument(
  * Validate that document processing is supported for file type
  */
 export function isProcessingSupported(fileType: string): boolean {
-    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'].includes(fileType);
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls'].includes(fileType);
 }
 
 /**
  * Get list of supported file types
  */
 export function getSupportedFileTypes(): string[] {
-    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'];
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls'];
 }

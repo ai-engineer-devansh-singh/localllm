@@ -5,21 +5,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
-  const { messages, sendMessage, activeModel, isGenerating, clearMessages } = useChatContext();
+  const { messages, sendMessage, activeModel, isGenerating, clearMessages, webSearchEnabled, isSearching, toggleWebSearch } = useChatContext();
   const [inputText, setInputText] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
@@ -33,7 +33,7 @@ export default function ChatScreen() {
       await sendMessage(messageToSend);
       // Scroll to bottom after sending
       setTimeout(() => {
-        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+        flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -58,6 +58,28 @@ export default function ChatScreen() {
         >
           {item.content}
         </Text>
+        
+        {/* Show sources if available */}
+        {!isUser && item.sources && item.sources.length > 0 && (
+          <View style={styles.sourcesContainer}>
+            <Text style={styles.sourcesTitle}>🔍 Sources:</Text>
+            {item.sources.map((source, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.sourceItem}
+                onPress={() => {
+                  // Could open in browser
+                  console.log('Open URL:', source.url);
+                }}
+              >
+                <Ionicons name="link" size={14} color={darkTheme.colors.primary} />
+                <Text style={styles.sourceText} numberOfLines={1}>
+                  {source.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
     );
   };
@@ -155,14 +177,15 @@ export default function ChatScreen() {
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item) => item.id}
-            inverted
             contentContainerStyle={[
               styles.messagesList,
-              { paddingBottom: 16 },
+              { paddingTop: 16, paddingBottom: 16 },
             ]}
-            ListHeaderComponent={renderHeader}
+            ListFooterComponent={renderHeader}
             showsVerticalScrollIndicator={false}
             windowSize={10}
+            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+            onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           />
         )}
       </View>
@@ -178,6 +201,31 @@ export default function ChatScreen() {
           },
         ]}
       >
+        {/* Web Search Toggle */}
+        <View style={styles.searchToggleContainer}>
+          <TouchableOpacity
+            style={[
+              styles.searchToggle,
+              webSearchEnabled && styles.searchToggleActive,
+            ]}
+            onPress={toggleWebSearch}
+          >
+            <Ionicons
+              name={webSearchEnabled ? "globe" : "globe-outline"}
+              size={16}
+              color={webSearchEnabled ? "#fff" : darkTheme.colors.onSurfaceVariant}
+            />
+            <Text
+              style={[
+                styles.searchToggleText,
+                webSearchEnabled && styles.searchToggleTextActive,
+              ]}
+            >
+              Web Search {isSearching && '...'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.input}
@@ -388,5 +436,52 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.5,
+  },
+  searchToggleContainer: {
+    marginBottom: 8,
+  },
+  searchToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: darkTheme.colors.surfaceVariant,
+    alignSelf: 'flex-start',
+  },
+  searchToggleActive: {
+    backgroundColor: darkTheme.colors.primary,
+  },
+  searchToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: darkTheme.colors.onSurfaceVariant,
+  },
+  searchToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  sourcesContainer: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139, 92, 246, 0.1)',
+  },
+  sourcesTitle: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: darkTheme.colors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  sourceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  sourceText: {
+    fontSize: 9,
+    color: darkTheme.colors.primary,
+    flex: 1,
   },
 });

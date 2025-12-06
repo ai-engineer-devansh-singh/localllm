@@ -9,11 +9,10 @@ export interface PickedDocument {
 }
 
 const SUPPORTED_TYPES = {
-    'application/pdf': 'pdf' as const,
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
-    'application/vnd.ms-excel': 'xls' as const,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' as const,
     'application/msword': 'doc' as const,
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
+    'application/vnd.ms-excel': 'xls' as const,
     'text/plain': 'txt' as const,
 };
 

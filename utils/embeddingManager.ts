@@ -1,6 +1,7 @@
 import { EmbeddingModel } from '@/types/chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { initLlama, LlamaContext } from 'llama.rn';
 
 const EMBEDDING_MODEL_KEY = '@embedding_model';
@@ -108,6 +109,9 @@ export async function downloadEmbeddingModel(
     const fileUri = `${MODELS_DIR}${fileName}`;
 
     try {
+        // Activate wake lock to prevent device from sleeping during download
+        await activateKeepAwakeAsync('embedding-download');
+        
         console.log('Starting embedding download from:', model.downloadUrl);
 
         // Create download resumable for progress tracking
@@ -160,6 +164,9 @@ export async function downloadEmbeddingModel(
             await FileSystem.deleteAsync(fileUri, { idempotent: true });
         } catch (e) { /* ignore */ }
         throw error;
+    } finally {
+        // Always deactivate wake lock when download completes or fails
+        deactivateKeepAwake('embedding-download');
     }
 }
 

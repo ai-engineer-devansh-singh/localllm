@@ -1,6 +1,7 @@
 import { DownloadProgress, Model } from '@/types/chat';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 const MODELS_DIR = `${FileSystem.documentDirectory}models/`;
 const ACTIVE_MODEL_KEY = '@active_model';
@@ -153,6 +154,9 @@ export async function downloadModel(
   }
 
   try {
+    // Activate wake lock to prevent device from sleeping during download
+    await activateKeepAwakeAsync('model-download');
+    
     console.log('Starting download from:', model.downloadUrl);
     console.log('Saving to:', fileUri);
 
@@ -270,6 +274,9 @@ export async function downloadModel(
     }
 
     throw error;
+  } finally {
+    // Always deactivate wake lock when download completes or fails
+    deactivateKeepAwake('model-download');
   }
 }
 
