@@ -1,5 +1,5 @@
 {
-  "name": "stickersmash",
+  "name": "radiq",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:search": "node test-web-search.js"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",
@@ -17,9 +18,9 @@
     "@react-navigation/elements": "^2.2.3",
     "@react-navigation/native": "^7.0.14",
     "buffer": "^6.0.3",
-    "cheerio-without-node-native": "^0.20.2",
+    "dotenv": "^17.2.3",
     "events": "^3.3.0",
-    "expo": "~52.0.0",
+    "expo": "~52.0.48",
     "expo-blur": "~14.0.0",
     "expo-build-properties": "~0.13.3",
     "expo-constants": "~17.0.0",
@@ -32,7 +33,7 @@
     "expo-keep-awake": "~14.0.0",
     "expo-linear-gradient": "~14.0.2",
     "expo-linking": "~7.0.0",
-    "expo-router": "~4.0.0",
+    "expo-router": "~4.0.22",
     "expo-splash-screen": "~0.29.0",
     "expo-sqlite": "~15.1.4",
     "expo-status-bar": "~2.0.0",

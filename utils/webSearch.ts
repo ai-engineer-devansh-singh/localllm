@@ -1,5 +1,4 @@
-// @ts-ignore - cheerio-without-node-native doesn't have types
-import * as cheerio from 'cheerio-without-node-native';
+import Constants from 'expo-constants';
 
 export interface SearchResult {
   title: string;
@@ -14,61 +13,68 @@ export interface WebSearchResponse {
   timestamp: number;
 }
 
-/**
- * Search DuckDuckGo and return results
- */
-export async function searchDuckDuckGo(query: string, maxResults: number = 5): Promise<SearchResult[]> {
-  try {
-    console.log('Searching DuckDuckGo for:', query);
-    
-    // Use DuckDuckGo HTML version for scraping
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-    
-    const response = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    });
+// Google Custom Search API configuration
+const GOOGLE_API_KEY = Constants.expoConfig?.extra?.googleApiKey || '';
+const GOOGLE_SEARCH_ENGINE_ID = Constants.expoConfig?.extra?.googleSearchEngineId || '';
 
-    if (!response.ok) {
-      throw new Error(`Search failed: ${response.status}`);
+/**
+ * Search using Google Programmable Search Engine
+ */
+export async function searchGoogle(query: string, maxResults: number = 5): Promise<SearchResult[]> {
+  try {
+    // Validate API credentials
+    if (!GOOGLE_API_KEY || !GOOGLE_SEARCH_ENGINE_ID) {
+      throw new Error('Google API credentials not configured. Please set GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID in .env file');
     }
 
-    const html = await response.text();
-    const $ = cheerio.load(html);
+    console.log('Searching Google for:', query);
+    
+    // Google Custom Search JSON API endpoint
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_API_KEY}&cx=${GOOGLE_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&num=${Math.min(maxResults, 10)}`;
+    
+    const response = await fetch(searchUrl);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      
+      if (response.status === 429) {
+        throw new Error('Google API quota exceeded. Please try again later or upgrade your plan.');
+      } else if (response.status === 403) {
+        throw new Error('Invalid Google API key or search engine ID. Please check your credentials.');
+      } else if (response.status === 400) {
+        throw new Error('Invalid search query or parameters.');
+      }
+      
+      throw new Error(`Search failed: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const data = await response.json();
     const results: SearchResult[] = [];
 
-    // Parse search results from DuckDuckGo HTML
-    $('.result').each((index: number, element: any) => {
-      if (index >= maxResults) return false;
+    // Parse search results from Google Custom Search API response
+    if (data.items && Array.isArray(data.items)) {
+      for (const item of data.items) {
+        if (results.length >= maxResults) break;
 
-      const $result = $(element);
-      const $link = $result.find('.result__a');
-      const $snippet = $result.find('.result__snippet');
-      
-      const title = $link.text().trim();
-      const url = $link.attr('href') || '';
-      const snippet = $snippet.text().trim();
-
-      if (title && url) {
         results.push({
-          title,
-          url: url.startsWith('//') ? `https:${url}` : url,
-          snippet,
+          title: item.title || '',
+          url: item.link || '',
+          snippet: item.snippet || '',
         });
       }
-    });
+    }
 
     console.log(`Found ${results.length} search results`);
     return results;
   } catch (error) {
-    console.error('DuckDuckGo search error:', error);
+    console.error('Google search error:', error);
     throw new Error(`Failed to search: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 /**
  * Fetch and extract main content from a URL
+ * Using simple text extraction without HTML parsing
  */
 export async function fetchPageContent(url: string): Promise<string> {
   try {
@@ -87,38 +93,19 @@ export async function fetchPageContent(url: string): Promise<string> {
     }
 
     const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // Remove script, style, and nav elements
-    $('script, style, nav, header, footer, aside, iframe, noscript').remove();
-
-    // Try to find main content area
-    let content = '';
     
-    // Priority order for content extraction
-    const selectors = [
-      'article',
-      'main',
-      '[role="main"]',
-      '.content',
-      '.post-content',
-      '.entry-content',
-      '#content',
-      'body',
-    ];
-
-    for (const selector of selectors) {
-      const $element = $(selector).first();
-      if ($element.length > 0) {
-        content = $element.text();
-        break;
-      }
-    }
-
-    // Clean up the content
-    content = content
+    // Simple text extraction - remove HTML tags and clean up
+    let content = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '') // Remove scripts
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '') // Remove styles
+      .replace(/<[^>]+>/g, ' ') // Remove all HTML tags
+      .replace(/&nbsp;/g, ' ') // Replace nbsp
+      .replace(/&amp;/g, '&') // Replace amp
+      .replace(/&lt;/g, '<') // Replace lt
+      .replace(/&gt;/g, '>') // Replace gt
+      .replace(/&quot;/g, '"') // Replace quot
+      .replace(/&#\d+;/g, '') // Remove numeric entities
       .replace(/\s+/g, ' ') // Normalize whitespace
-      .replace(/\n+/g, '\n') // Normalize newlines
       .trim();
 
     // Limit content length (max 3000 chars for context)
@@ -143,8 +130,8 @@ export async function performWebSearch(
   fetchContent: boolean = true
 ): Promise<WebSearchResponse> {
   try {
-    // Get search results
-    const results = await searchDuckDuckGo(query, maxResults);
+    // Get search results from Google
+    const results = await searchGoogle(query, maxResults);
 
     // Optionally fetch content from each result
     if (fetchContent && results.length > 0) {
