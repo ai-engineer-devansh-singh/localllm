@@ -4,7 +4,7 @@ module.exports = {
     slug: "radiq",
     version: "1.0.0",
     orientation: "portrait",
-    icon: "./assets/images/icon.png",
+    icon: "./assets/images/image.png",
     scheme: "radiq",
     userInterfaceStyle: "automatic",
     newArchEnabled: false,
@@ -14,9 +14,9 @@ module.exports = {
     android: {
       adaptiveIcon: {
         backgroundColor: "#E6F4FE",
-        foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
-        monochromeImage: "./assets/images/android-icon-monochrome.png"
+        foregroundImage: "./assets/images/image.png",
+        backgroundImage: "./assets/images/image.png",
+        monochromeImage: "./assets/images/image.png"
       },
       edgeToEdgeEnabled: true,
       predictiveBackGestureEnabled: false,
@@ -24,14 +24,14 @@ module.exports = {
     },
     web: {
       output: "static",
-      favicon: "./assets/images/favicon.png"
+      favicon: "./assets/images/image.png"
     },
     plugins: [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/splash-icon.png",
+          image: "./assets/images/image.png",
           imageWidth: 200,
           resizeMode: "contain",
           backgroundColor: "#ffffff",
