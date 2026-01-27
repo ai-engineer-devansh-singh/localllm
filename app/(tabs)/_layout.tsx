@@ -69,7 +69,7 @@ export default function TabLayout() {
             ),
           }}
         />
-        <Tabs.Screen
+        {/* <Tabs.Screen
           name="documents"
           options={{
             title: 'Documents',
@@ -81,7 +81,7 @@ export default function TabLayout() {
               />
             ),
           }}
-        />
+        /> */}
 
       </Tabs>
     </ChatProvider>
