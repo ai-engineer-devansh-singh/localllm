@@ -2,7 +2,7 @@ import { Document, Message, Model } from '@/types/chat';
 import { pickDocument } from '@/utils/documentPicker';
 import { processDocument } from '@/utils/documentProcessor';
 import { copyDocumentToAppDir, deleteDocument as deleteDocumentFile, getDocuments, saveDocument } from '@/utils/documentStorage';
-import { generateEmbedding } from '@/utils/embeddingManager';
+import { generateEmbedding, getEmbeddingModel } from '@/utils/embeddingManager';
 import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
 import { chunkText } from '@/utils/textChunker';
@@ -19,6 +19,7 @@ interface ChatContextType {
   isProcessingDocument: boolean;
   webSearchEnabled: boolean;
   isSearching: boolean;
+  hasEmbeddingModel: boolean;
   sendMessage: (content: string) => Promise<void>;
   stopGenerating: () => void;
   clearMessages: () => void;
@@ -28,6 +29,7 @@ interface ChatContextType {
   deleteDocument: (docId: string) => Promise<void>;
   refreshDocuments: () => Promise<void>;
   toggleWebSearch: () => void;
+  checkEmbeddingModel: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -41,11 +43,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isProcessingDocument, setIsProcessingDocument] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false);
 
   // Load active model, downloaded models, and documents on mount
   useEffect(() => {
     loadInitialData();
     loadDocuments();
+    checkEmbeddingModel();
     initializeVectorStore().catch(console.error);
   }, []);
 
@@ -380,47 +384,100 @@ ${content}`;
   };
 
   /**
+   * Check if embedding model is available
+   */
+  const checkEmbeddingModel = async () => {
+    try {
+      const model = await getEmbeddingModel();
+      const hasModel = model !== null && 
+                      model.localPath !== undefined && 
+                      model.localPath !== null && 
+                      model.localPath.length > 0;
+      
+      console.log('🔍 Checking embedding model:', {
+        modelExists: model !== null,
+        hasLocalPath: model?.localPath,
+        hasEmbeddingModel: hasModel
+      });
+      
+      setHasEmbeddingModel(hasModel);
+    } catch (error) {
+      console.error('❌ Error checking embedding model:', error);
+      setHasEmbeddingModel(false);
+    }
+  };
+
+  /**
    * Upload and process a document for RAG
    */
   const uploadDocument = async () => {
+    let picked: any = null;
+    
     try {
+      // Check if embedding model is available
+      if (!hasEmbeddingModel) {
+        throw new Error('Please download an embedding model first from the Models tab');
+      }
+
       setIsProcessingDocument(true);
 
       // Pick document
-      const picked = await pickDocument();
+      picked = await pickDocument();
       if (!picked) {
         setIsProcessingDocument(false);
         return;
       }
 
-      console.log('Processing document:', picked.name);
+      console.log('📄 Processing document:', picked.name);
+      console.log('   Type:', picked.type);
+      console.log('   Size:', picked.size);
 
       // Copy to app directory
+      console.log('📋 Copying document to app directory...');
       const localPath = await copyDocumentToAppDir(picked.uri, picked.name);
+      console.log('✅ Document copied successfully');
 
       // Process document (extract text)
+      console.log('🔍 Extracting text from document...');
       const processed = await processDocument(localPath, picked.type);
-      console.log(`Extracted ${processed.wordCount} words from ${picked.name}`);
+      console.log(`✅ Extracted ${processed.wordCount} words from ${picked.name}`);
 
       // Chunk the text
+      console.log('✂️ Chunking text...');
       const chunks = chunkText(processed.text);
-      console.log(`Created ${chunks.length} chunks`);
+      console.log(`✅ Created ${chunks.length} chunks`);
+
+      // Double-check embedding model is still available before generating embeddings
+      const embeddingModel = await getEmbeddingModel();
+      if (!embeddingModel || !embeddingModel.localPath) {
+        throw new Error('Embedding model is no longer available. Please ensure it is downloaded.');
+      }
+      console.log(`✅ Using embedding model: ${embeddingModel.name}`);
 
       // Generate embeddings and store
-      console.log('Generating embeddings...');
-      for (const chunk of chunks) {
-        const embedding = await generateEmbedding(chunk.text);
-        await storeEmbedding(
-          {
-            id: `${picked.name}_${chunk.chunkIndex}`,
-            docId: picked.name,
-            text: chunk.text,
-            chunkIndex: chunk.chunkIndex,
-            embedding,
-          },
-          picked.name
-        );
+      console.log('🧮 Generating embeddings...');
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i];
+        console.log(`   Processing chunk ${i + 1}/${chunks.length}`);
+        try {
+          const embedding = await generateEmbedding(chunk.text);
+          await storeEmbedding(
+            {
+              id: `${picked.name}_${chunk.chunkIndex}`,
+              docId: picked.name,
+              text: chunk.text,
+              chunkIndex: chunk.chunkIndex,
+              embedding,
+            },
+            picked.name
+          );
+          console.log(`   ✅ Chunk ${i + 1}/${chunks.length} embedded successfully`);
+        } catch (embeddingError) {
+          console.error(`   ❌ Failed to embed chunk ${i + 1}/${chunks.length}:`, embeddingError);
+          throw new Error(`Failed to generate embedding for chunk ${i + 1}: ${embeddingError instanceof Error ? embeddingError.message : 'Unknown error'}`);
+        }
       }
+      console.log('✅ All embeddings generated and stored');
 
       // Save document metadata
       const doc: Document = {
@@ -438,7 +495,18 @@ ${content}`;
 
       console.log('✅ Document processed successfully');
     } catch (error) {
-      console.error('Error uploading document:', error);
+      console.error('❌ Error uploading document:', error);
+      
+      // Clean up - try to delete the copied file if it exists
+      if (picked && picked.name) {
+        try {
+          await deleteDocumentFile(picked.name);
+          console.log('   🗑️ Cleaned up failed document upload');
+        } catch (cleanupError) {
+          console.warn('   ⚠️ Could not clean up document file:', cleanupError);
+        }
+      }
+      
       throw error;
     } finally {
       setIsProcessingDocument(false);
@@ -481,6 +549,7 @@ ${content}`;
         isProcessingDocument,
         webSearchEnabled,
         isSearching,
+        hasEmbeddingModel,
         sendMessage,
         stopGenerating,
         clearMessages,
@@ -490,6 +559,7 @@ ${content}`;
         deleteDocument,
         refreshDocuments,
         toggleWebSearch,
+        checkEmbeddingModel,
       }}
     >
       {children}

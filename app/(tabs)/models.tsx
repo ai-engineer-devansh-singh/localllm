@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ModelsScreen() {
   const insets = useSafeAreaInsets();
-  const { downloadedModels, activeModel, refreshModels } = useChatContext();
+  const { downloadedModels, activeModel, refreshModels, checkEmbeddingModel } = useChatContext();
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageUsed, setStorageUsed] = useState<number>(0);
@@ -150,6 +150,7 @@ export default function ModelsScreen() {
       });
 
       await refreshEmbeddingModels();
+      await checkEmbeddingModel();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Success', `${model.name} downloaded successfully`);
     } catch (error) {
@@ -176,6 +177,7 @@ export default function ModelsScreen() {
             try {
               await deleteEmbeddingModel(modelId);
               await refreshEmbeddingModels();
+              await checkEmbeddingModel();
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert('Success', 'Embedding model deleted successfully');
             } catch (error) {

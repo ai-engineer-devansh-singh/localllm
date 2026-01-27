@@ -4,7 +4,8 @@ import { Document as AppDocument } from '@/types/chat';
 import { formatBytes } from '@/utils/modelManager';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
@@ -12,12 +13,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function DocumentsScreen() {
   const insets = useSafeAreaInsets();
-  const { documents, uploadDocument, deleteDocument, isProcessingDocument } = useChatContext();
+  const { documents, uploadDocument, deleteDocument, isProcessingDocument, hasEmbeddingModel, checkEmbeddingModel } = useChatContext();
   const [storageUsed, setStorageUsed] = useState(0);
 
   useEffect(() => {
     calculateStorage();
+    checkEmbeddingModel();
   }, [documents]);
+
+  // Check embedding model when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      checkEmbeddingModel();
+    }, [])
+  );
 
   const calculateStorage = () => {
     const total = documents.reduce((sum: number, doc: AppDocument) => sum + doc.size, 0);
@@ -25,6 +34,16 @@ export default function DocumentsScreen() {
   };
 
   const handleUpload = async () => {
+    if (!hasEmbeddingModel) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      Alert.alert(
+        'Embedding Model Required',
+        'Please download an embedding model from the Models tab first. This is required to process and search through your documents.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       await uploadDocument();
@@ -113,14 +132,14 @@ export default function DocumentsScreen() {
           </View>
           <TouchableOpacity
             onPress={handleUpload}
-            style={styles.uploadButton}
+            style={[styles.uploadButton, !hasEmbeddingModel && styles.uploadButtonDisabled]}
             activeOpacity={0.7}
-            disabled={isProcessingDocument}
+            disabled={isProcessingDocument || !hasEmbeddingModel}
           >
             <Ionicons 
               name={isProcessingDocument ? "hourglass" : "add-circle"} 
               size={28} 
-              color={darkTheme.colors.primary} 
+              color={!hasEmbeddingModel ? darkTheme.colors.onSurfaceVariant : darkTheme.colors.primary} 
             />
           </TouchableOpacity>
         </View>
@@ -146,16 +165,23 @@ export default function DocumentsScreen() {
               Upload documents to chat with your AI about their content
             </Text>
             <Text style={styles.emptySubtext}>
-              Currently supports: TXT files{'\n'}
-              (PDF, Excel, Word coming soon)
+              Supports: PDF, Word (DOC/DOCX), Excel (XLS/XLSX), and TXT files
             </Text>
+            {!hasEmbeddingModel && (
+              <Text style={styles.warningText}>
+                ⚠️ Download an embedding model from the Models tab first
+              </Text>
+            )}
             <TouchableOpacity
               onPress={handleUpload}
-              style={styles.emptyButton}
+              style={[styles.emptyButton, !hasEmbeddingModel && styles.emptyButtonDisabled]}
               activeOpacity={0.8}
+              disabled={!hasEmbeddingModel}
             >
               <Ionicons name="add-circle-outline" size={20} color="#FFF" />
-              <Text style={styles.emptyButtonText}>Upload Document</Text>
+              <Text style={styles.emptyButtonText}>
+                {hasEmbeddingModel ? 'Upload Document' : 'Embedding Model Required'}
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         ) : (
@@ -273,6 +299,9 @@ const styles = StyleSheet.create({
   uploadButton: {
     padding: spacing.sm,
   },
+  uploadButtonDisabled: {
+    opacity: 0.4,
+  },
   scrollView: {
     flex: 1,
   },
@@ -326,6 +355,18 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: '#FFFFFF',
     fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyButtonDisabled: {
+    backgroundColor: darkTheme.colors.onSurfaceVariant,
+    opacity: 0.6,
+  },
+  warningText: {
+    fontSize: 11,
+    color: '#FF9800',
+    textAlign: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xl,
     fontWeight: '600',
   },
   documentCard: {

@@ -9,6 +9,7 @@ export interface PickedDocument {
 }
 
 const SUPPORTED_TYPES = {
+    'application/pdf': 'pdf' as const,
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx' as const,
     'application/msword': 'doc' as const,
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
@@ -20,27 +21,38 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export async function pickDocument(): Promise<PickedDocument | null> {
     try {
+        console.log('📂 Opening document picker...');
+        console.log('   Supported types:', Object.keys(SUPPORTED_TYPES));
+        
         const result = await DocumentPicker.getDocumentAsync({
             type: Object.keys(SUPPORTED_TYPES),
             copyToCacheDirectory: true,
         });
 
         if (result.canceled || !result.assets || result.assets.length === 0) {
+            console.log('   Document picker cancelled');
             return null;
         }
 
         const file = result.assets[0];
+        console.log('📄 Document selected:', {
+            name: file.name,
+            size: file.size,
+            mimeType: file.mimeType
+        });
 
         // Validate file size
         if (file.size && file.size > MAX_FILE_SIZE) {
-            throw new Error('File size exceeds 10MB limit');
+            throw new Error(`File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds 10MB limit`);
         }
 
         // Map MIME type to our type
         const docType = SUPPORTED_TYPES[file.mimeType as keyof typeof SUPPORTED_TYPES];
         if (!docType) {
-            throw new Error('Unsupported file type');
+            throw new Error(`Unsupported file type: ${file.mimeType}. Supported types: PDF, Word, Excel, and TXT files.`);
         }
+
+        console.log(`✅ Document validated: ${file.name} (${docType})`);
 
         return {
             uri: file.uri,
@@ -50,7 +62,7 @@ export async function pickDocument(): Promise<PickedDocument | null> {
             type: docType,
         };
     } catch (error) {
-        console.error('Document picker error:', error);
+        console.error('❌ Document picker error:', error);
         throw error;
     }
 }
