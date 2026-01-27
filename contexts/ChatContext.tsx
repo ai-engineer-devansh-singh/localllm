@@ -151,7 +151,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           console.log('   Using cached search results');
           webSearchResults = cached;
         } else {
-          webSearchResults = await performWebSearch(content, 3, true);
+          webSearchResults = await performWebSearch(content, 2, true);
           cacheSearch(content, webSearchResults);
           console.log(`   Found ${webSearchResults.results.length} web results`);
         }
@@ -201,7 +201,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // Prepare final prompt
     let finalPrompt = content;
     if (contextPrefix) {
-      finalPrompt = contextPrefix + 'User question: ' + content;
+      finalPrompt = `You are a helpful AI assistant. Below is information retrieved from web searches and documents to help answer the user's question. Use this information to provide an accurate and detailed response.
+
+${contextPrefix}
+Based on the information above, please answer the following question:
+${content}`;
       console.log('📝 Using context-enhanced prompt');
     } else {
       console.log('📝 Using direct prompt (no context)');

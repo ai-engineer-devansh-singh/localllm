@@ -67,37 +67,102 @@ async function testSearch(query, maxResults = 3) {
     }
 
     // Test content fetching from first result
-    if (data.items && data.items[0]) {
-      console.log('4️⃣  Testing Content Extraction...');
-      const firstUrl = data.items[0].link;
-      console.log(`   Fetching content from: ${firstUrl}`);
+    const resultsWithContent = [];
+    if (data.items && data.items.length > 0) {
+      console.log('4️⃣  Testing Content Extraction from Top Results...');
       
-      try {
-        const contentResponse = await fetch(firstUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-          signal: AbortSignal.timeout(10000),
-        });
+      for (let i = 0; i < Math.min(3, data.items.length); i++) {
+        const item = data.items[i];
+        console.log(`\n   [${i + 1}] Fetching: ${item.link}`);
+        
+        try {
+          const contentResponse = await fetch(item.link, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: AbortSignal.timeout(10000),
+          });
 
-        if (contentResponse.ok) {
-          const html = await contentResponse.text();
-          const content = html
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .substring(0, 500);
-          
-          console.log(`   ✅ Content extracted: ${content.length} characters`);
-          console.log(`   Preview: ${content.substring(0, 150)}...`);
-        } else {
-          console.log(`   ⚠️  Failed to fetch content: ${contentResponse.status}`);
+          if (contentResponse.ok) {
+            const html = await contentResponse.text();
+            let content = html
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/&nbsp;/g, ' ')
+              .replace(/&amp;/g, '&')
+              .replace(/&lt;/g, '<')
+              .replace(/&gt;/g, '>')
+              .replace(/&quot;/g, '"')
+              .replace(/&#\d+;/g, '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            
+            if (content.length > 3000) {
+              content = content.substring(0, 3000) + '...';
+            }
+            
+            resultsWithContent.push({
+              title: item.title,
+              url: item.link,
+              snippet: item.snippet,
+              content: content
+            });
+            
+            console.log(`       ✅ Extracted ${content.length} characters`);
+          } else {
+            console.log(`       ⚠️  Failed: ${contentResponse.status}`);
+            resultsWithContent.push({
+              title: item.title,
+              url: item.link,
+              snippet: item.snippet,
+              content: ''
+            });
+          }
+        } catch (error) {
+          console.log(`       ⚠️  Error: ${error.message}`);
+          resultsWithContent.push({
+            title: item.title,
+            url: item.link,
+            snippet: item.snippet,
+            content: ''
+          });
         }
-      } catch (error) {
-        console.log(`   ⚠️  Content fetch error: ${error.message}`);
       }
+      
+      // Format as it would be sent to the AI
+      console.log('\n5️⃣  FORMATTED CONTEXT (What the AI receives):\n');
+      console.log('=' .repeat(60));
+      
+      let contextText = `Web Search Results for: "${query}"\n\n`;
+      resultsWithContent.forEach((result, index) => {
+        contextText += `[${index + 1}] ${result.title}\n`;
+        contextText += `URL: ${result.url}\n`;
+        
+        if (result.content) {
+          contextText += `Content: ${result.content}\n`;
+        } else if (result.snippet) {
+          contextText += `Snippet: ${result.snippet}\n`;
+        }
+        contextText += '\n';
+      });
+      
+      console.log(contextText);
+      console.log('=' .repeat(60));
+      
+      // Show what the full prompt would look like
+      const userQuestion = query;
+      const fullPrompt = `You are a helpful AI assistant. Below is information retrieved from web searches and documents to help answer the user's question. Use this information to provide an accurate and detailed response.
+
+${contextText}
+Based on the information above, please answer the following question:
+${userQuestion}`;
+      
+      console.log('\n6️⃣  FULL PROMPT (What the AI model receives):\n');
+      console.log('=' .repeat(60));
+      console.log(fullPrompt);
+      console.log('=' .repeat(60));
+      console.log(`\n   Total prompt length: ${fullPrompt.length} characters`);
     }
 
     console.log('\n' + '=' .repeat(60));
@@ -117,7 +182,7 @@ async function testSearch(query, maxResults = 3) {
 // Run the test
 (async () => {
   try {
-    await testSearch('React Native development', 3);
+    await testSearch('what is the weather in dublin', 2);
     process.exit(0);
   } catch (error) {
     process.exit(1);

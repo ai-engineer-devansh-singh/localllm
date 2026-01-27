@@ -69,16 +69,6 @@ export const AVAILABLE_MODELS: Model[] = [
 
   // Advanced - Best quality (requires more RAM)
   {
-    id: 'phi-3.5-mini',
-    name: 'Phi-3.5 Mini 3.8B (~2.2GB)',
-    size: 2200000000,
-    downloadUrl: 'https://huggingface.co/microsoft/Phi-3.5-mini-instruct-gguf/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf',
-    isDownloaded: false,
-    isActive: false,
-    description: 'Microsoft\'s reasoning powerhouse, excellent for complex tasks',
-    category: ['reasoning', 'advanced'],
-  },
-  {
     id: 'qwen-2.5-3b',
     name: 'Qwen 2.5 3B (~1.9GB)',
     size: 1900000000,
