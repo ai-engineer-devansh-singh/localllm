@@ -2,12 +2,17 @@ import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system';
 import { cleanText, extractTextFromFile } from './textChunker';
 
+// Use mammoth browser version for React Native compatibility
 // @ts-ignore
-import mammoth from 'mammoth';
-// @ts-ignore
-import pdfParse from 'pdf-parse';
+import * as mammoth from 'mammoth/mammoth.browser';
 // @ts-ignore
 import * as XLSX from 'xlsx';
+
+// Note: pdf-parse uses Node.js APIs (fs, worker_threads) that don't work in React Native
+// For PDF support in React Native, we'd need:
+// - A cloud-based PDF parsing service (AWS Textract, Google Cloud Vision, etc.)
+// - Or react-native-pdf-lib (limited text extraction)
+// - Or expo-document-picker + cloud function to process PDFs
 
 /**
  * Document processor for extracting text from various file formats
@@ -36,32 +41,13 @@ export async function processDocument(
                 break;
 
             case 'pdf':
-                try {
-                    console.log('📄 Reading PDF file...');
-                    const pdfData = await FileSystem.readAsStringAsync(fileUri, {
-                        encoding: FileSystem.EncodingType.Base64,
-                    });
-                    console.log(`   Read ${pdfData.length} bytes`);
-
-                    console.log('🔄 Converting PDF data...');
-                    const binaryString = Buffer.from(pdfData, 'base64');
-                    console.log(`   Buffer size: ${binaryString.length} bytes`);
-                    
-                    console.log('🔍 Parsing PDF...');
-                    const data = await pdfParse(binaryString);
-                    text = data.text;
-                    pageCount = data.numpages || 0;
-
-                    console.log(`✅ PDF parsed: ${pageCount} pages, ${text.length} characters`);
-
-                    if (!text || text.trim().length === 0) {
-                        throw new Error('No text content found in PDF');
-                    }
-                } catch (error) {
-                    console.error('❌ PDF processing error:', error);
-                    throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                }
-                break;
+                // PDF parsing in React Native requires native modules or cloud services
+                // pdf-parse uses Node.js APIs (fs, worker_threads) that don't work in React Native
+                throw new Error(
+                    'PDF support is not available in the mobile app yet. ' +
+                    'PDF files require server-side processing or native modules. ' +
+                    'Please use Word (DOCX), Excel (XLSX), or TXT files for now.'
+                );
 
             case 'docx':
             case 'doc':
@@ -70,28 +56,51 @@ export async function processDocument(
                     const docxData = await FileSystem.readAsStringAsync(fileUri, {
                         encoding: FileSystem.EncodingType.Base64,
                     });
-                    console.log(`   Read ${docxData.length} bytes`);
+                    
+                    if (!docxData || docxData.length === 0) {
+                        throw new Error('Failed to read document file - file is empty');
+                    }
+                    
+                    console.log(`   Read ${docxData.length} characters of base64 data`);
 
                     console.log('🔄 Converting Word document data...');
-                    const binaryString = Buffer.from(docxData, 'base64');
-                    console.log(`   Buffer size: ${binaryString.length} bytes`);
-                    const arrayBuffer = binaryString.buffer.slice(
-                        binaryString.byteOffset,
-                        binaryString.byteOffset + binaryString.byteLength
+                    const binaryData = Buffer.from(docxData, 'base64');
+                    console.log(`   Buffer size: ${binaryData.length} bytes`);
+                    
+                    // Create ArrayBuffer from Buffer
+                    const arrayBuffer = binaryData.buffer.slice(
+                        binaryData.byteOffset,
+                        binaryData.byteOffset + binaryData.byteLength
                     );
+                    
+                    console.log(`   ArrayBuffer size: ${arrayBuffer.byteLength} bytes`);
 
                     console.log('🔍 Extracting text from Word document...');
+                    
+                    // Use mammoth browser API
                     const result = await mammoth.extractRawText({ arrayBuffer });
-                    text = result.value;
+                    
+                    if (!result) {
+                        throw new Error('Mammoth returned no result');
+                    }
+                    
+                    if (result.messages && result.messages.length > 0) {
+                        console.log('   Mammoth messages:', result.messages);
+                    }
+                    
+                    text = result.value || '';
 
                     console.log(`✅ Word document parsed: ${text.length} characters`);
 
                     if (!text || text.trim().length === 0) {
-                        throw new Error('No text content found in document');
+                        throw new Error('No text content found in document. The file might be empty or contain only images.');
                     }
                 } catch (error) {
                     console.error('❌ DOCX processing error:', error);
-                    throw new Error(`Failed to process DOCX: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    if (error instanceof Error) {
+                        throw new Error(`Failed to process Word document: ${error.message}`);
+                    }
+                    throw new Error('Failed to process Word document: Unknown error');
                 }
                 break;
 
@@ -146,12 +155,12 @@ export async function processDocument(
  * Validate that document processing is supported for file type
  */
 export function isProcessingSupported(fileType: string): boolean {
-    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'].includes(fileType);
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls'].includes(fileType);
 }
 
 /**
  * Get list of supported file types
  */
 export function getSupportedFileTypes(): string[] {
-    return ['txt', 'pdf', 'docx', 'doc', 'xlsx', 'xls'];
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls'];
 }

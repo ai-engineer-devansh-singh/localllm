@@ -165,7 +165,7 @@ export default function DocumentsScreen() {
               Upload documents to chat with your AI about their content
             </Text>
             <Text style={styles.emptySubtext}>
-              Supports: PDF, Word (DOC/DOCX), Excel (XLS/XLSX), and TXT files
+              Supports: Word (DOC/DOCX), Excel (XLS/XLSX), and TXT files
             </Text>
             {!hasEmbeddingModel && (
               <Text style={styles.warningText}>

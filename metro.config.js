@@ -8,6 +8,8 @@ config.resolver.extraNodeModules = {
   ...config.resolver.extraNodeModules,
   stream: require.resolve('stream-browserify'),
   buffer: require.resolve('buffer'),
+  util: require.resolve('util'),
+  events: require.resolve('events'),
 };
 
 module.exports = config;
