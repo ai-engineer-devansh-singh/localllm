@@ -1,299 +1,775 @@
-# Radiq 🤖
+<div align="center">
 
-A powerful, privacy-focused mobile AI assistant that runs Large Language Models (LLMs) completely on-device. Chat with AI, process documents with RAG (Retrieval Augmented Generation), and perform web searches - all without sending your data to the cloud.
+# 🌟 Radiq
+
+### Your Privacy-First AI Assistant
+
+**Run powerful Large Language Models entirely on your device**  
+*No cloud, no subscriptions, no data collection*
+
+[![React Native](https://img.shields.io/badge/React%20Native-0.76-61DAFB?style=flat&logo=react)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-52-000020?style=flat&logo=expo)](https://expo.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
+[Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Models](#-available-models) • [Building](#-building-for-production)
+
+</div>
+
+---
+
+## 🎯 Overview
+
+**Radiq** is a cutting-edge mobile application that brings the power of Large Language Models directly to your smartphone. Unlike traditional AI assistants that rely on cloud processing, Radiq runs everything locally on your device, ensuring **complete privacy** and **offline functionality**.
+
+### Why Radiq?
+
+- **🔒 100% Privacy** - Your conversations never leave your device
+- **📡 Offline First** - No internet required for AI inference
+- **💰 Zero Cost** - No API fees, no subscriptions, completely free
+- **🚀 Advanced Features** - RAG, web search, multi-model support
+- **⚡ Optimized** - Mobile-friendly models designed for efficiency
+
+---
 
 ## ✨ Features
 
-### 🧠 On-Device LLM Inference
-- Run state-of-the-art language models directly on your mobile device
-- Multiple optimized models to choose from (1B-7B parameters)
-- No internet required for inference (privacy-first)
-- Powered by [llama.rn](https://github.com/mybigday/llama.rn) using GGUF format
+### 🧠 **On-Device LLM Inference**
+Run state-of-the-art language models directly on your mobile device
+- 🎯 Multiple optimized models (1B-3B parameters)
+- 🔐 Complete privacy - no data sent to the cloud
+- 📱 Powered by [llama.rn](https://github.com/mybigday/llama.rn) with GGUF format
+- ⚡ Real-time streaming responses
+- 🛑 Stop generation control
 
-### 📄 Document Processing & RAG
-- Upload and process multiple document types (PDF, DOCX, TXT)
-- Automatic text extraction and chunking
-- On-device embedding generation for semantic search
-- Vector store for efficient similarity search
-- Context-aware responses using your documents
+### 📄 **RAG (Retrieval Augmented Generation)**
+Upload documents and let AI answer questions using your content
+- 📎 Support for PDF, DOCX, XLSX, and TXT files
+- ✂️ Smart text chunking with overlap
+- 🧮 On-device embedding generation
+- 🔍 SQLite-based vector store with cosine similarity search
+- 🎯 Context-aware responses from your documents
+- 📊 Efficient document management
 
-### 🌐 Web Search Integration
-- Google Programmable Search Engine integration
-- High-quality, ranked search results
-- Fetch and parse web page content
-- Augment AI responses with real-time web data
-- Search result caching for efficiency
-- Proper API error handling and quota management
+### 🌐 **Web Search Integration**
+Enhance AI responses with real-time web information
+- 🔍 Google Programmable Search Engine integration
+- 📰 Fetch and parse web page content
+- 💾 Search result caching for efficiency
+- 🎯 Source attribution in responses
+- 📊 Quota management and error handling
 
-### 💬 Advanced Chat Interface
-- Clean, intuitive chat UI with dark theme
-- Streaming responses with animated typing indicators
-- Context-aware conversations
-- Stop generation mid-response
-- Clear chat history
+### 💬 **Beautiful Chat Interface**
+Modern, intuitive chat experience
+- 🌙 Elegant dark theme
+- ⚡ Animated streaming responses
+- 📱 Smooth scrolling and gestures
+- 🔗 Source links for web-enhanced answers
+- 🗑️ Clear chat history
+- ⏸️ Stop generation mid-response
 
-### 📚 Model Management
-- Download models directly in the app
-- Progress tracking with download speeds
-- Cancel downloads anytime
-- Delete models to free up space
-- Switch between models seamlessly
-- Storage usage monitoring
+### 📚 **Smart Model Management**
+Download and manage AI models with ease
+- 📥 In-app model downloads from HuggingFace
+- 📊 Real-time progress tracking with download speeds
+- ❌ Cancel downloads anytime
+- 🗑️ Delete models to free up space
+- 🔄 Switch between models seamlessly
+- 💾 Storage usage monitoring
+- 📦 Curated model selection optimized for mobile
 
-## 🚀 Getting Started
+---
+
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v18 or higher)
-- npm or yarn
-- iOS Simulator / Android Emulator or physical device
-- Expo CLI
+
+Before you begin, ensure you have the following installed:
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Node.js** | v18+ | JavaScript runtime |
+| **npm/yarn** | Latest | Package manager |
+| **Expo CLI** | Latest | Development tools |
+| **iOS Simulator** or **Android Emulator** | - | Testing platform |
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd localllm
-   ```
+#### 1️⃣ Clone & Install
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/radiq.git
+cd radiq
 
-3. **Configure Google Search (Optional)**
-   
-   To enable web search functionality:
-   
-   a. Create a Google Programmable Search Engine at [programmablesearchengine.google.com](https://programmablesearchengine.google.com/)
-   
-   b. Get an API key from [Google Cloud Console](https://console.cloud.google.com/) and enable Custom Search API
-   
-   c. Update `.env` file:
-   ```env
-   GOOGLE_SEARCH_API_KEY=your_api_key_here
-   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
-   ```
-   
-   d. Test the integration:
-   ```bash
-   npm run test:search
-   ```
-   
-   See [GOOGLE_SEARCH_SETUP.md](GOOGLE_SEARCH_SETUP.md) for detailed setup instructions.
+# Install dependencies
+npm install
+```
 
-4. **Start the development server**
-   ```bash
-   npx expo start
-   ```
+#### 2️⃣ Configure Web Search (Optional)
 
-5. **Run on your platform**
-   - Press `i` for iOS simulator
-   - Press `a` for Android emulator
-   - Scan QR code with Expo Go (limited functionality)
-   - For full features, create a development build:
-     ```bash
-     npx expo run:ios
-     # or
-     npx expo run:android
-     ```
+To enable web search functionality, set up Google's Programmable Search Engine:
 
-## 📱 Platform Support
+<details>
+<summary>📋 Click to expand setup instructions</summary>
 
-- **iOS**: ✅ Fully supported (iOS 13+)
-- **Android**: ✅ Fully supported (Android 6.0+)
-- **Web**: ⚠️ Limited (LLM inference not available)
+**a) Create Search Engine**
+- Visit [Google Programmable Search Engine](https://programmablesearchengine.google.com/)
+- Click "Add" and select "Search the entire web"
+- Name it (e.g., "Radiq Search") and create
+
+**b) Get API Key**
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Create/select a project
+- Enable "Custom Search API" in APIs & Services
+- Create an API key in Credentials
+
+**c) Configure Environment**
+Create a `.env` file in the project root:
+```env
+GOOGLE_SEARCH_API_KEY=your_api_key_here
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
+```
+
+**d) Test Integration**
+```bash
+npm run test:search
+```
+
+📖 See [GOOGLE_SEARCH_SETUP.md](GOOGLE_SEARCH_SETUP.md) for detailed instructions.
+
+</details>
+
+#### 3️⃣ Start Development
+
+```bash
+# Start the Expo development server
+npx expo start
+```
+
+#### 4️⃣ Run on Platform
+
+Choose your platform:
+
+```bash
+# iOS (requires macOS)
+npx expo run:ios
+
+# Android
+npx expo run:android
+
+# Web (limited functionality - no LLM inference)
+npx expo start --web
+```
+
+> **Note:** For full functionality including LLM inference, use development builds (`expo run:ios/android`) rather than Expo Go.
+
+### First-Time Setup in App
+
+1. 🚀 Open the app on your device
+2. 📦 Navigate to the **Models** tab
+3. ⬇️ Download a model (start with **Llama 3.2 1B** for best balance)
+4. ✅ Activate the downloaded model
+5. 💬 Go to **Chat** tab and start chatting!
+
+---
 
 ## 🏗️ Architecture
 
-### Tech Stack
-- **Framework**: React Native with Expo
-- **Navigation**: Expo Router (file-based routing)
-- **LLM Inference**: llama.rn with GGUF models
-- **Storage**: AsyncStorage + Expo FileSystem + SQLite
-- **UI**: React Native Paper with custom components
-- **Animations**: React Native Reanimated
+### Technology Stack
 
-### Key Components
+```mermaid
+graph TD
+    A[React Native 0.76] --> B[Expo 52]
+    B --> C[Expo Router]
+    B --> D[llama.rn]
+    B --> E[Expo SQLite]
+    B --> F[AsyncStorage]
+    D --> G[On-Device LLM]
+    E --> H[Vector Store]
+```
 
-#### Models Tab
-- Browse available LLM models
-- Download with progress tracking
-- Manage embedding models
-- View storage usage
-- Set active model
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Framework** | React Native 0.76 | Cross-platform mobile development |
+| **Development** | Expo SDK 52 | Simplified build & deployment |
+| **Navigation** | Expo Router | File-based routing system |
+| **LLM Engine** | llama.rn | On-device inference with GGUF models |
+| **Storage** | AsyncStorage + SQLite + FileSystem | Persistent data management |
+| **UI Library** | React Native Paper | Material Design components |
+| **Animations** | React Native Reanimated | Smooth 60fps animations |
+| **State** | React Context | Global state management |
+| **Language** | TypeScript | Type-safe development |
 
-#### Chat Tab
-- Send messages to active LLM
-- Toggle web search enhancement
-- View conversation history
+### Application Structure
+
+```
+radiq/
+├── app/                          # 📱 Application screens
+│   ├── (tabs)/                  # Tab navigation
+│   │   ├── chat.tsx             # 💬 Chat interface
+│   │   ├── models.tsx           # 📦 Model management
+│   │   └── _documents.tsx       # 📄 Document handling
+│   ├── _layout.tsx              # Root layout
+│   └── index.tsx                # Entry point
+│
+├── components/                   # 🧩 Reusable components
+│   └── ui/                      # Custom UI elements
+│       ├── ModelCard.tsx        # Model display card
+│       ├── AnimatedMessage.tsx  # Chat message animation
+│       └── ThemedButton.tsx     # Themed button component
+│
+├── contexts/                     # 🌐 React contexts
+│   └── ChatContext.tsx          # Global chat state
+│
+├── utils/                        # 🛠️ Core utilities
+│   ├── modelManager.ts          # 📦 Model download & management
+│   ├── onnxInference.ts         # 🧠 LLM loading & inference
+│   ├── embeddingManager.ts      # 🔢 Embedding generation
+│   ├── documentProcessor.ts     # 📄 Document text extraction
+│   ├── textChunker.ts           # ✂️ Smart text chunking
+│   ├── vectorStore.ts           # 🗄️ Vector similarity search
+│   └── webSearch.ts             # 🔍 Google Search integration
+│
+├── types/                        # 📝 TypeScript definitions
+│   └── chat.ts                  # Type definitions
+│
+└── constants/                    # ⚙️ App constants
+    └── theme.ts                 # Theme configuration
+```
+
+### Core Components
+
+#### 💬 Chat Tab
+- Real-time conversation interface
+- Streaming response animation
+- Web search toggle
 - Stop generation control
-- Context from uploaded documents
+- Source attribution display
+- Message history management
 
-#### Documents Tab
-- Upload documents (PDF, DOCX, TXT)
-- View processed documents
-- Delete documents and embeddings
-- Monitor document storage
+#### 📦 Models Tab
+- Browse available LLMs (6+ models)
+- Download with progress tracking & speeds
+- Embedding model management
+- Storage usage visualization
+- Activate/deactivate models
+- Delete models to free space
 
-### Core Utilities
+#### 📄 Documents Tab
+- Document upload (PDF, DOCX, XLSX, TXT)
+- Processing status tracking
+- Document list with metadata
+- Delete documents & embeddings
+- Storage monitoring
 
-- **modelManager.ts**: Model downloads, storage, and activation
-- **onnxInference.ts**: LLM loading and text generation
-- **embeddingManager.ts**: Embedding model management and generation
-- **documentProcessor.ts**: Extract text from various document formats
-- **textChunker.ts**: Smart text chunking with overlap
-- **vectorStore.ts**: SQLite-based vector storage and similarity search
-- **webSearch.ts**: Google Programmable Search Engine integration with content extraction
+### Key Utilities Explained
+
+| Utility | Responsibility |
+|---------|---------------|
+| **modelManager** | Downloads models from HuggingFace, manages local storage, tracks active model |
+| **onnxInference** | Loads GGUF models with llama.rn, generates text responses, manages inference context |
+| **embeddingManager** | Downloads embedding models, generates vector embeddings for text chunks |
+| **documentProcessor** | Extracts text from PDFs (pdf-parse), DOCX (mammoth), XLSX (xlsx) |
+| **textChunker** | Splits documents into overlapping chunks for better context retrieval |
+| **vectorStore** | SQLite-based storage, cosine similarity search, embedding persistence |
+| **webSearch** | Google Custom Search API integration, result caching, content extraction |
+
+---
 
 ## 🎯 Available Models
 
-### Language Models
-- **TinyLlama 1.1B** (~637MB) - Fastest, good for basic chat
-- **Llama 3.2 1B** (~670MB) - Latest Llama, great balance
-- **Gemma 2 2B** (~1.4GB) - Google's efficient model
-- **Qwen 2.5 1.5B/3B** - Multilingual support
-- **Phi 3.5 Mini** (~2.2GB) - Microsoft's powerful compact model
-- **Llama 3.2 3B** (~2GB) - Enhanced reasoning
-- **StableLM 2 1.6B** - Stability AI model
+### Language Models (LLMs)
+
+Choose from 6 carefully curated models optimized for mobile devices:
+
+| Model | Size | Parameters | Speed | Quality | Best For |
+|-------|------|------------|-------|---------|----------|
+| **TinyLlama 1.1B** | 637MB | 1.1B | ⚡⚡⚡ | ⭐⭐⭐ | Quick responses, low-end devices |
+| **Llama 3.2 1B** 🌟 | 670MB | 1B | ⚡⚡⚡ | ⭐⭐⭐⭐ | **Recommended starter** - Best balance |
+| **Qwen 2.5 1.5B** | 950MB | 1.5B | ⚡⚡ | ⭐⭐⭐⭐ | Multilingual, strong reasoning |
+| **Gemma 2 2B** | 1.4GB | 2B | ⚡⚡ | ⭐⭐⭐⭐⭐ | Google's efficient model |
+| **Llama 3.2 3B** 🏆 | 1.9GB | 3B | ⚡ | ⭐⭐⭐⭐⭐ | **Best quality** - Enhanced reasoning |
+| **Qwen 2.5 3B** | 1.9GB | 3B | ⚡ | ⭐⭐⭐⭐⭐ | Coding, mathematics, multilingual |
 
 ### Embedding Models
-- **GTE-Small Q4** (~25MB) - 384-dimensional embeddings
 
-## 📋 Configuration
+| Model | Size | Dimensions | Purpose |
+|-------|------|------------|---------|
+| **GTE-Small Q4** | 25MB | 384 | Document embeddings for RAG |
 
-### App Configuration
-Edit `app.json` to customize:
-- App name and bundle identifier
-- Splash screen and icons
-- Orientation and UI style
-- Platform-specific settings
+> **💡 Recommendation:**  
+> - **New users:** Start with **Llama 3.2 1B** for excellent quality and speed
+> - **Best quality:** Use **Llama 3.2 3B** if you have 4GB+ RAM
+> - **Multilingual:** Choose **Qwen 2.5** models for non-English languages
+> - **Low storage:** **TinyLlama** works great on devices with limited space
 
-### Build Configuration
-Edit `eas.json` for EAS Build settings
+---
 
-### TypeScript Configuration
-Fully typed with TypeScript - see `tsconfig.json`
+## 📱 Platform Support
 
-## 🔧 Development
+| Platform | Status | Min Version | Notes |
+|----------|--------|-------------|-------|
+| **iOS** | ✅ Fully Supported | iOS 13+ | All features available |
+| **Android** | ✅ Fully Supported | Android 6.0+ | All features available |
+| **Web** | ⚠️ Limited | Modern browsers | No LLM inference |
 
-### Project Structure
-```
-app/
-  (tabs)/          - Tab navigation screens
-  _layout.tsx      - Root layout
-  index.tsx        - Entry screen
-  modal.tsx        - Modal screens
-components/        - Reusable UI components
-  ui/              - Custom UI elements
-contexts/          - React contexts (ChatContext)
-utils/             - Core utility functions
-types/             - TypeScript type definitions
-constants/         - Theme and constants
-```
+### Device Requirements
 
-### Key Scripts
+**Minimum:**
+- 2GB RAM (for 1B models)
+- 2GB free storage
+- ARM64 processor
+
+**Recommended:**
+- 4GB+ RAM (for 3B models)
+- 5GB+ free storage
+- Modern smartphone (2020+)
+
+---
+
+## 🛠️ Development
+
+### Available Scripts
+
 ```bash
-npm start              # Start development server
+# Development
+npm start              # Start Expo dev server
 npm run android        # Run on Android
-npm run ios            # Run on iOS
-npm run web            # Run on web
-npm run lint           # Lint code
-npm run test:search    # Test web search integration
+npm run ios            # Run on iOS (requires macOS)
+npm run web            # Run on web browser
+
+# Code Quality
+npm run lint           # Check code style with ESLint
+
+# Testing
+npm run test:search    # Test Google Search integration
+
+# Utilities
+npm run reset-project  # Reset to fresh state
 ```
 
-## 🛠️ Building for Production
+### Environment Variables
 
-### Using EAS Build
+Create a `.env` file for configuration:
+
+```env
+# Google Search API (Optional)
+GOOGLE_SEARCH_API_KEY=your_api_key_here
+GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id_here
+```
+
+### Development Workflow
+
+1. **Setup Development Environment**
+   ```bash
+   npm install
+   npx expo start
+   ```
+
+2. **Make Changes**
+   - Edit files in `app/`, `components/`, or `utils/`
+   - Hot reload automatically updates the app
+
+3. **Test on Device**
+   - Use development build for full features
+   - Test on both iOS and Android when possible
+
+4. **Code Quality**
+   ```bash
+   npm run lint
+   ```
+
+---
+
+## � Building for Production
+
+### Method 1: EAS Build (Recommended)
+
+[Expo Application Services](https://expo.dev/eas) provides the easiest way to build production apps.
+
+#### Initial Setup
+
 ```bash
-# Install EAS CLI
+# Install EAS CLI globally
 npm install -g eas-cli
 
-# Configure EAS
+# Login to Expo account (create one at expo.dev if needed)
+eas login
+
+# Configure your project for EAS Build
 eas build:configure
-
-# Build for Android
-eas build --platform android
-
-# Build for iOS
-eas build --platform ios
 ```
 
-### Local Builds
+#### Build for Android
+
 ```bash
-# Android APK
+# Build APK for Android
+eas build --platform android --profile preview
+
+# Build AAB for Google Play Store
+eas build --platform android --profile production
+```
+
+#### Build for iOS
+
+```bash
+# Build for iOS (requires Apple Developer account)
+eas build --platform ios --profile production
+
+# Build for iOS Simulator (testing)
+eas build --platform ios --profile preview --simulator
+```
+
+#### Submit to App Stores
+
+```bash
+# Submit to Google Play Store
+eas submit --platform android
+
+# Submit to Apple App Store
+eas submit --platform ios
+```
+
+### Method 2: Local Builds
+
+Build locally without EAS (requires complete native development setup).
+
+#### Android APK
+
+```bash
+# Build release APK
 npx expo run:android --variant release
 
-# iOS
-npx expo run:ios --configuration Release
+# APK location: android/app/build/outputs/apk/release/app-release.apk
 ```
 
-## 📦 Storage Requirements
+#### iOS IPA
 
-### Minimum Free Space
-- Base app: ~50MB
-- Small models (1-2B): 600MB - 1.5GB
-- Medium models (3-4B): 2GB - 3GB
-- Documents + Embeddings: 100MB - 1GB (varies)
+```bash
+# Build release version (requires macOS + Xcode)
+npx expo run:ios --configuration Release
 
-### Recommended
-- 5GB+ free space for comfortable usage
-- More for larger models (7B+)
+# Archive and export with Xcode
+```
+
+### Build Configuration
+
+Edit [`eas.json`](eas.json) to customize build profiles:
+
+```json
+{
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  }
+}
+```
+
+### Pre-Build Checklist
+
+- [ ] Update version in [`app.config.js`](app.config.js)
+- [ ] Test on both iOS and Android
+- [ ] Configure app icon and splash screen
+- [ ] Set up environment variables
+- [ ] Test web search integration
+- [ ] Verify model downloads work
+- [ ] Test document processing
+- [ ] Check storage permissions
+
+---
+
+## 💾 Storage & Performance
+
+### Storage Requirements
+
+| Component | Space Required | Notes |
+|-----------|---------------|-------|
+| **Base App** | ~50MB | Installed app size |
+| **Small Models (1-2B)** | 600MB - 1.5GB | Recommended for most users |
+| **Medium Models (3B)** | 1.9GB - 2.5GB | Requires more RAM |
+| **Embedding Model** | ~25MB | Required for RAG |
+| **Documents + Vectors** | 100MB - 1GB | Varies by usage |
+
+**Recommended:** 5GB+ free space for comfortable usage
+
+### Performance Optimization Tips
+
+1. **🎯 Model Selection**
+   - Start with 1B models for fastest responses
+   - Use 3B models only if you have 4GB+ RAM
+   - Monitor device temperature during use
+
+2. **📝 Context Management**
+   - Shorter prompts generate faster
+   - Clear chat history periodically
+   - Limit document size for processing
+
+3. **📱 Device Optimization**
+   - Close background apps
+   - Ensure sufficient free storage
+   - Keep device cool for sustained performance
+   - Use low power mode sparingly (slows inference)
+
+4. **🗄️ Storage Management**
+   - Delete unused models
+   - Remove processed documents you no longer need
+   - Clear web search cache periodically
+
+---
 
 ## 🔐 Privacy & Security
-LLM processing** - Model inference happens locally
-- **Local storage** - All data stored on your device
-- **No tracking** - No analytics or telemetry
-- **Open source dependencies** - Auditable code
-- **Optional web search** - Only sends queries to Google when web search is enabled
 
-### Google Search API Usage
+### Our Privacy Commitment
+
+**Radiq is built with privacy as a core principle:**
+
+✅ **100% Local Processing** - All LLM inference happens on your device  
+✅ **No Telemetry** - We don't collect usage data or analytics  
+✅ **No Cloud Sync** - Your data stays on your device  
+✅ **No Account Required** - Use completely anonymously  
+✅ **Open Source** - Code is auditable and transparent  
+
+### Data Storage
+
+All data is stored locally on your device:
+
+- **Chat History** - AsyncStorage (local database)
+- **Models** - Device file system
+- **Documents** - App's document directory
+- **Embeddings** - SQLite database
+- **Settings** - AsyncStorage
+
+### Google Search API (Optional Feature)
+
 When web search is enabled:
-- Search queries are sent to Google's Custom Search API
-- Free tier: 100 queries/day
-- See [Google's Privacy Policy](https://policies.google.com/privacy) for their data handling
-- **Open source dependencies** - Auditable code
+- ⚠️ Search queries are sent to Google's Custom Search API
+- 🌐 Fetched web pages are parsed locally on device
+- 💾 Results are cached locally for efficiency
+- 🔒 See [Google's Privacy Policy](https://policies.google.com/privacy)
+- 🎛️ Toggle off anytime in chat interface
 
-## ⚡ Performance Tips
+**Free Tier Limits:** 100 queries/day  
+**Paid Tier:** $5 per 1,000 additional queries
 
-1. **Model Selection**: Start with smaller models (1-2B) for faster responses
-2. **Context Length**: Shorter prompts generate faster
-3. **Document Size**: Chunk large documents for better performance
-4. **Memory Management**: Close other apps for optimal performance
-5. **Storage**: Keep sufficient free space for smooth operation
+### Permissions
+
+| Permission | Purpose | Required |
+|------------|---------|----------|
+| **Storage** | Save models and documents | ✅ Yes |
+| **Network** | Download models, web search | Optional |
+
+---
 
 ## 🐛 Troubleshooting
 
-### Model won't load
-- Ensure sufficient free storage
-- Try re-downloading the model
-- Check device compatibility
+### Common Issues & Solutions
 
-### Slow generation
-- Use a smaller model
-- Reduce context length
-- Close background apps
+<details>
+<summary><strong>❌ Model won't load or crashes</strong></summary>
 
-### Document processing fails
-- Check file format (PDF, DOCX, TXT supported)
-- Ensure file is not corrupted
-- Try smaller documents
+**Possible causes:**
+- Insufficient RAM for model size
+- Corrupted download
+- Low storage space
+
+**Solutions:**
+```bash
+# Try a smaller model (1B instead of 3B)
+# Delete and re-download the model
+# Free up device storage
+# Close background apps
+```
+</details>
+
+<details>
+<summary><strong>⏱️ Slow generation / responses taking too long</strong></summary>
+
+**Possible causes:**
+- Model too large for device
+- Background apps consuming RAM
+- Device thermal throttling
+
+**Solutions:**
+- Switch to a smaller model (TinyLlama or Llama 3.2 1B)
+- Shorten your prompts
+- Close other apps
+- Let device cool down
+- Clear chat history
+</details>
+
+<details>
+<summary><strong>📄 Document processing fails</strong></summary>
+
+**Possible causes:**
+- Unsupported file format
+- Corrupted document
+- File too large
+
+**Solutions:**
+- Ensure file is PDF, DOCX, XLSX, or TXT
+- Try a smaller document
+- Check if file opens in other apps
+- Re-export document from original source
+</details>
+
+<details>
+<summary><strong>🔍 Web search not working</strong></summary>
+
+**Possible causes:**
+- Missing API credentials
+- API quota exceeded
+- Network connectivity
+
+**Solutions:**
+```bash
+# Check .env file has correct values
+# Verify API key in Google Cloud Console
+# Check API is enabled
+# Review quota in Cloud Console
+npm run test:search  # Test integration
+```
+</details>
+
+<details>
+<summary><strong>📥 Download stuck or failing</strong></summary>
+
+**Possible causes:**
+- Network interruption
+- Low storage space
+- Server timeout
+
+**Solutions:**
+- Cancel and retry download
+- Check internet connection
+- Ensure sufficient free space (model size + 500MB)
+- Try downloading a different model first
+</details>
+
+### Getting Help
+
+- 📖 Check [GOOGLE_SEARCH_SETUP.md](GOOGLE_SEARCH_SETUP.md) for search setup
+- 🐛 [Open an issue](https://github.com/yourusername/radiq/issues) on GitHub
+- 💬 Search existing issues for solutions
+- 📧 Contact: your-email@example.com
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit issues and pull requests.
+We welcome contributions from the community! Here's how you can help:
 
-## 📄 License
+### Ways to Contribute
 
-[Your License Here]
+- 🐛 **Report Bugs** - Open detailed issue reports
+- 💡 **Suggest Features** - Share ideas for improvements
+- 📝 **Improve Documentation** - Fix typos, add examples
+- 🔧 **Submit Pull Requests** - Add features or fix bugs
+- ⭐ **Star the Project** - Show your support!
+
+### Development Setup
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run linter (`npm run lint`)
+5. Commit changes (`git commit -m 'Add amazing feature'`)
+6. Push to branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
+
+### Code Style
+
+- Follow existing code patterns
+- Use TypeScript for type safety
+- Add comments for complex logic
+- Keep components focused and reusable
+- Test on both iOS and Android
+
+---
 
 ## 🙏 Acknowledgments
 
-- [llama.rn](https://github.com/mybigday/llama.rn) - On-device LLM inference
-- [Hugging Face](https://huggingface.co) - Model hosting
-- [Expo](https://expo.dev) - React Native framework
-- Model creators: Meta, Google, Microsoft, Alibaba, Stability AI
+This project wouldn't be possible without these amazing open-source projects:
 
-## 📞 Support
+- 🦙 **[llama.rn](https://github.com/mybigday/llama.rn)** - On-device LLM inference engine
+- 🤗 **[Hugging Face](https://huggingface.co)** - Model hosting and distribution
+- ⚛️ **[Expo](https://expo.dev)** - React Native development platform
+- 🎨 **[React Native Paper](https://reactnativepaper.com/)** - Material Design components
 
-For issues, questions, or suggestions, please open an issue on GitHub.
+### Model Credits
+
+Thank you to the teams behind these incredible models:
+
+- 🦙 **Meta AI** - Llama 3.2 models
+- 💎 **Google** - Gemma 2 models  
+- 🌟 **Alibaba Cloud** - Qwen 2.5 models
+- ⚡ **TinyLlama Team** - TinyLlama 1.1B
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+
+```
+MIT License
+
+Copyright (c) 2024 Radiq
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+```
+
+---
+
+## 📞 Support & Contact
+
+### Get Help
+
+- 📖 **Documentation** - Read this README thoroughly
+- 🐛 **Issues** - [GitHub Issues](https://github.com/yourusername/radiq/issues)
+- 💬 **Discussions** - [GitHub Discussions](https://github.com/yourusername/radiq/discussions)
+
+### Stay Updated
+
+- ⭐ Star this repo to get updates
+- 👀 Watch for new releases
+- 🐦 Follow [@yourusername](https://twitter.com/yourusername) on Twitter
+
+### Project Links
+
+- 🌐 **Website** - [radiq.app](https://radiq.app) (if applicable)
+- 📱 **App Store** - Coming soon
+- 🤖 **Play Store** - Coming soon
+- 💻 **GitHub** - [github.com/yourusername/radiq](https://github.com/yourusername/radiq)
+
+---
+
+<div align="center">
+
+### Built with ❤️ for privacy and performance
+
+**Made by developers, for developers**
+
+[⬆ Back to Top](#-radiq)
+
+</div>
