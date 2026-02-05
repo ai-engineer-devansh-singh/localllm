@@ -69,19 +69,12 @@ export default function TabLayout() {
             ),
           }}
         />
-        {/* <Tabs.Screen
-          name="documents"
+        <Tabs.Screen
+          name="_documents"
           options={{
-            title: 'Documents',
-            tabBarIcon: ({ color, size, focused }) => (
-              <Ionicons 
-                name={focused ? "folder-open" : "folder-open-outline"} 
-                size={size + 2} 
-                color={color} 
-              />
-            ),
+            href: null,
           }}
-        /> */}
+        />
 
       </Tabs>
     </ChatProvider>
