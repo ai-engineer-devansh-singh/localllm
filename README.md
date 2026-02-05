@@ -12,6 +12,16 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+---
+
+### 📲 Download
+
+**[⬇️ Download APK for Android](https://github.com/ai-engineer-devansh-singh/localllm/releases/tag/1)**
+
+*Latest stable release • Requires Android 8.0+*
+
+---
+
 [Features](#-features) • [Quick Start](#-quick-start) • [Architecture](#-architecture) • [Models](#-available-models) • [Building](#-building-for-production)
 
 </div>
@@ -50,6 +60,8 @@ Upload documents and let AI answer questions using your content
 - 🔍 SQLite-based vector store with cosine similarity search
 - 🎯 Context-aware responses from your documents
 - 📊 Efficient document management
+
+> **Note:** Document handling feature is currently being refined. Some bugs are being fixed before the full release.
 
 ### 🌐 **Web Search Integration**
 Enhance AI responses with real-time web information
