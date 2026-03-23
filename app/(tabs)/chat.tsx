@@ -1,11 +1,14 @@
 import { darkTheme } from '@/constants/theme';
 import { useChatContext } from '@/contexts/ChatContext';
 import { Message } from '@/types/chat';
+import { pickDocument } from '@/utils/documentPicker';
+import { processDocument } from '@/utils/documentProcessor';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -21,13 +24,40 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { messages, sendMessage, activeModel, isGenerating, clearMessages, webSearchEnabled, isSearching, toggleWebSearch } = useChatContext();
   const [inputText, setInputText] = useState('');
+  const [attachedFile, setAttachedFile] = useState<{ name: string; text: string } | null>(null);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
-  const handleSend = async () => {
-    if (!inputText.trim() || !activeModel || isGenerating) return;
+  const handleAttachFile = async () => {
+    if (isGenerating) return;
+    try {
+      setIsProcessingFile(true);
+      const picked = await pickDocument();
+      if (!picked) return;
+      const processed = await processDocument(picked.uri, picked.type);
+      setAttachedFile({ name: picked.name, text: processed.text });
+    } catch (error) {
+      Alert.alert(
+        'File Error',
+        error instanceof Error ? error.message : 'Failed to process file.',
+      );
+    } finally {
+      setIsProcessingFile(false);
+    }
+  };
 
-    const messageToSend = inputText.trim();
+  const handleSend = async () => {
+    if ((!inputText.trim() && !attachedFile) || !activeModel || isGenerating) return;
+
+    let messageToSend = inputText.trim();
+    if (attachedFile) {
+      const fileContext = `[Attached file: ${attachedFile.name}]\n\n${attachedFile.text}`;
+      messageToSend = messageToSend
+        ? `${messageToSend}\n\n${fileContext}`
+        : fileContext;
+    }
     setInputText('');
+    setAttachedFile(null);
     
     try {
       await sendMessage(messageToSend);
@@ -226,7 +256,51 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
         
+        {/* Attached file badge */}
+        {attachedFile && (
+          <View style={styles.attachmentBadge}>
+            <Ionicons name="document-text" size={14} color={darkTheme.colors.primary} />
+            <TouchableOpacity
+              style={styles.attachmentNameTouchable}
+              onPress={() => {
+                const preview = attachedFile.text.slice(0, 800);
+                const truncated = attachedFile.text.length > 800 ? `\n\n… (${attachedFile.text.length} chars total)` : '';
+                Alert.alert(`📄 ${attachedFile.name}`, preview + truncated);
+              }}
+            >
+              <Text style={styles.attachmentName} numberOfLines={1}>
+                {attachedFile.name}
+              </Text>
+              <Text style={styles.attachmentChars}>{attachedFile.text.length} chars extracted</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setAttachedFile(null)}>
+              <Ionicons name="close-circle" size={16} color={darkTheme.colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={styles.inputWrapper}>
+          {/* File attach button */}
+          <TouchableOpacity
+            style={styles.attachButton}
+            onPress={handleAttachFile}
+            disabled={isGenerating || isProcessingFile}
+          >
+            {isProcessingFile ? (
+              <ActivityIndicator size="small" color={darkTheme.colors.primary} />
+            ) : (
+              <Ionicons
+                name="attach"
+                size={22}
+                color={
+                  !isGenerating
+                    ? darkTheme.colors.primary
+                    : darkTheme.colors.onSurfaceVariant
+                }
+              />
+            )}
+          </TouchableOpacity>
+
           <TextInput
             style={styles.input}
             placeholder={
@@ -251,16 +325,16 @@ export default function ChatScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!inputText.trim() || !activeModel) && styles.sendButtonDisabled,
+                (!inputText.trim() && !attachedFile || !activeModel) && styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
-              disabled={!inputText.trim() || !activeModel || isGenerating}
+              disabled={(!inputText.trim() && !attachedFile) || !activeModel || isGenerating}
             >
               <Ionicons
                 name="send"
                 size={22}
                 color={
-                  inputText.trim() && activeModel
+                  (inputText.trim() || attachedFile) && activeModel
                     ? darkTheme.colors.primary
                     : darkTheme.colors.onSurfaceVariant
                 }
@@ -426,6 +500,39 @@ const styles = StyleSheet.create({
     color: darkTheme.colors.onSurface,
     maxHeight: 100,
     paddingVertical: 8,
+  },
+  attachButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 18,
+  },
+  attachmentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.3)',
+  },
+  attachmentName: {
+    flex: 1,
+    fontSize: 11,
+    color: darkTheme.colors.primary,
+    fontWeight: '500',
+  },
+  attachmentNameTouchable: {
+    flex: 1,
+  },
+  attachmentChars: {
+    fontSize: 9,
+    color: darkTheme.colors.onSurfaceVariant,
+    marginTop: 1,
   },
   sendButton: {
     width: 40,

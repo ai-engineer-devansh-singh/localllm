@@ -82,8 +82,6 @@ export default function DocumentsScreen() {
 
   const getFileIcon = (type: string) => {
     switch (type) {
-      case 'pdf':
-        return 'document-text';
       case 'xlsx':
       case 'xls':
         return 'grid';

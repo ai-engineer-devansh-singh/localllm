@@ -9,7 +9,11 @@ module.exports = {
     userInterfaceStyle: "automatic",
     newArchEnabled: false,
     ios: {
-      supportsTablet: true
+      supportsTablet: true,
+      bundleIdentifier: "com.devanshsingh2199.radiq",
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false
+      }
     },
     android: {
       adaptiveIcon: {

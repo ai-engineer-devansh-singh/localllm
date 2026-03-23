@@ -54,7 +54,7 @@ Run state-of-the-art language models directly on your mobile device
 
 ### 📄 **RAG (Retrieval Augmented Generation)**
 Upload documents and let AI answer questions using your content
-- 📎 Support for PDF, DOCX, XLSX, and TXT files
+- 📎 Support for DOCX, XLSX, and TXT files
 - ✂️ Smart text chunking with overlap
 - 🧮 On-device embedding generation
 - 🔍 SQLite-based vector store with cosine similarity search
@@ -269,7 +269,7 @@ radiq/
 - Delete models to free space
 
 #### 📄 Documents Tab
-- Document upload (PDF, DOCX, XLSX, TXT)
+- Document upload (DOCX, XLSX, TXT)
 - Processing status tracking
 - Document list with metadata
 - Delete documents & embeddings
@@ -282,7 +282,7 @@ radiq/
 | **modelManager** | Downloads models from HuggingFace, manages local storage, tracks active model |
 | **onnxInference** | Loads GGUF models with llama.rn, generates text responses, manages inference context |
 | **embeddingManager** | Downloads embedding models, generates vector embeddings for text chunks |
-| **documentProcessor** | Extracts text from PDFs (pdf-parse), DOCX (mammoth), XLSX (xlsx) |
+| **documentProcessor** | Extracts text from DOCX (mammoth), XLSX (xlsx), and TXT files |
 | **textChunker** | Splits documents into overlapping chunks for better context retrieval |
 | **vectorStore** | SQLite-based storage, cosine similarity search, embedding persistence |
 | **webSearch** | Google Custom Search API integration, result caching, content extraction |
@@ -627,7 +627,7 @@ When web search is enabled:
 - File too large
 
 **Solutions:**
-- Ensure file is PDF, DOCX, XLSX, or TXT
+- Ensure file is DOCX, XLSX, or TXT
 - Try a smaller document
 - Check if file opens in other apps
 - Re-export document from original source

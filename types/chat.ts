@@ -41,7 +41,7 @@ export interface DownloadProgress {
 export interface Document {
   id: string;
   name: string;
-  type: 'pdf' | 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt';
+  type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt';
   size: number;
   uploadDate: number;
   chunkCount: number;

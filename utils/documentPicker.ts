@@ -5,7 +5,7 @@ export interface PickedDocument {
     name: string;
     size: number;
     mimeType: string;
-    type: 'pdf' | 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt';
+    type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt';
 }
 
 const SUPPORTED_TYPES = {
@@ -14,8 +14,6 @@ const SUPPORTED_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
     'application/vnd.ms-excel': 'xls' as const,
     'text/plain': 'txt' as const,
-    // Note: PDF support disabled - requires server-side processing
-    // 'application/pdf': 'pdf' as const,
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -50,7 +48,7 @@ export async function pickDocument(): Promise<PickedDocument | null> {
         // Map MIME type to our type
         const docType = SUPPORTED_TYPES[file.mimeType as keyof typeof SUPPORTED_TYPES];
         if (!docType) {
-            throw new Error(`Unsupported file type: ${file.mimeType}. Supported types: PDF, Word, Excel, and TXT files.`);
+            throw new Error(`Unsupported file type: ${file.mimeType}. Supported types: Word, Excel, and TXT files.`);
         }
 
         console.log(`✅ Document validated: ${file.name} (${docType})`);

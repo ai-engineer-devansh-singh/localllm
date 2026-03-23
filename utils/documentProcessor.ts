@@ -7,13 +7,6 @@ import { cleanText, extractTextFromFile } from './textChunker';
 import * as mammoth from 'mammoth/mammoth.browser';
 // @ts-ignore
 import * as XLSX from 'xlsx';
-
-// Note: pdf-parse uses Node.js APIs (fs, worker_threads) that don't work in React Native
-// For PDF support in React Native, we'd need:
-// - A cloud-based PDF parsing service (AWS Textract, Google Cloud Vision, etc.)
-// - Or react-native-pdf-lib (limited text extraction)
-// - Or expo-document-picker + cloud function to process PDFs
-
 /**
  * Document processor for extracting text from various file formats
  */
@@ -39,15 +32,6 @@ export async function processDocument(
             case 'txt':
                 text = await extractTextFromFile(fileUri);
                 break;
-
-            case 'pdf':
-                // PDF parsing in React Native requires native modules or cloud services
-                // pdf-parse uses Node.js APIs (fs, worker_threads) that don't work in React Native
-                throw new Error(
-                    'PDF support is not available in the mobile app yet. ' +
-                    'PDF files require server-side processing or native modules. ' +
-                    'Please use Word (DOCX), Excel (XLSX), or TXT files for now.'
-                );
 
             case 'docx':
             case 'doc':
