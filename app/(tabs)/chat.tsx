@@ -26,14 +26,23 @@ export default function ChatScreen() {
   const [inputText, setInputText] = useState('');
   const [attachedFile, setAttachedFile] = useState<{ name: string; text: string } | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
   const flatListRef = useRef<FlatList>(null);
+
+  const isImageType = (fileType: string) => ['jpg', 'jpeg', 'png', 'heic', 'webp'].includes(fileType);
 
   const handleAttachFile = async () => {
     if (isGenerating) return;
     try {
       setIsProcessingFile(true);
+      setProcessingStatus('Selecting file...');
       const picked = await pickDocument();
       if (!picked) return;
+      setProcessingStatus(
+        isImageType(picked.type)
+          ? 'Extracting text from image...'
+          : 'Extracting text from document...'
+      );
       const processed = await processDocument(picked.uri, picked.type);
       setAttachedFile({ name: picked.name, text: processed.text });
     } catch (error) {
@@ -42,6 +51,7 @@ export default function ChatScreen() {
         error instanceof Error ? error.message : 'Failed to process file.',
       );
     } finally {
+      setProcessingStatus('');
       setIsProcessingFile(false);
     }
   };
@@ -259,7 +269,11 @@ export default function ChatScreen() {
         {/* Attached file badge */}
         {attachedFile && (
           <View style={styles.attachmentBadge}>
-            <Ionicons name="document-text" size={14} color={darkTheme.colors.primary} />
+            <Ionicons
+              name={isImageType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'image' : 'document-text'}
+              size={14}
+              color={darkTheme.colors.primary}
+            />
             <TouchableOpacity
               style={styles.attachmentNameTouchable}
               onPress={() => {
@@ -342,6 +356,10 @@ export default function ChatScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {isProcessingFile && !!processingStatus && (
+          <Text style={styles.processingStatus}>{processingStatus}</Text>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -492,6 +510,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     gap: 8,
+  },
+  processingStatus: {
+    marginTop: 8,
+    fontSize: 12,
+    color: darkTheme.colors.onSurfaceVariant,
   },
   input: {
     flex: 1,

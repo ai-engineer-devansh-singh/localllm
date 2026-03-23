@@ -54,7 +54,8 @@ Run state-of-the-art language models directly on your mobile device
 
 ### 📄 **RAG (Retrieval Augmented Generation)**
 Upload documents and let AI answer questions using your content
-- 📎 Support for DOCX, XLSX, and TXT files
+- 📎 Support for DOCX, XLSX, TXT, and image files (JPG, PNG, HEIC, WEBP)
+- 🖼️ On-device OCR for extracting text from uploaded images
 - ✂️ Smart text chunking with overlap
 - 🧮 On-device embedding generation
 - 🔍 SQLite-based vector store with cosine similarity search

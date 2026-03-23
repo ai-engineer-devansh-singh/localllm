@@ -5,7 +5,7 @@ export interface PickedDocument {
     name: string;
     size: number;
     mimeType: string;
-    type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt';
+    type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt' | 'jpg' | 'jpeg' | 'png' | 'heic' | 'webp';
 }
 
 const SUPPORTED_TYPES = {
@@ -14,6 +14,26 @@ const SUPPORTED_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
     'application/vnd.ms-excel': 'xls' as const,
     'text/plain': 'txt' as const,
+    'image/jpeg': 'jpeg' as const,
+    'image/jpg': 'jpg' as const,
+    'image/png': 'png' as const,
+    'image/heic': 'heic' as const,
+    'image/heif': 'heic' as const,
+    'image/webp': 'webp' as const,
+};
+
+const EXTENSION_TO_TYPE = {
+    docx: 'docx' as const,
+    doc: 'doc' as const,
+    xlsx: 'xlsx' as const,
+    xls: 'xls' as const,
+    txt: 'txt' as const,
+    jpg: 'jpg' as const,
+    jpeg: 'jpeg' as const,
+    png: 'png' as const,
+    heic: 'heic' as const,
+    heif: 'heic' as const,
+    webp: 'webp' as const,
 };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -45,10 +65,17 @@ export async function pickDocument(): Promise<PickedDocument | null> {
             throw new Error(`File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds 10MB limit`);
         }
 
-        // Map MIME type to our type
-        const docType = SUPPORTED_TYPES[file.mimeType as keyof typeof SUPPORTED_TYPES];
+        // Map MIME type or extension to our type
+        const mimeType = file.mimeType || '';
+        const fromMime = SUPPORTED_TYPES[mimeType as keyof typeof SUPPORTED_TYPES];
+        const extension = getFileExtension(file.name);
+        const fromExtension = EXTENSION_TO_TYPE[extension as keyof typeof EXTENSION_TO_TYPE];
+        const docType = fromMime || fromExtension;
+
         if (!docType) {
-            throw new Error(`Unsupported file type: ${file.mimeType}. Supported types: Word, Excel, and TXT files.`);
+            throw new Error(
+                `Unsupported file type: ${file.mimeType || file.name}. Supported types: Word, Excel, TXT, and images (JPG, PNG, HEIC, WEBP).`
+            );
         }
 
         console.log(`✅ Document validated: ${file.name} (${docType})`);
@@ -57,7 +84,7 @@ export async function pickDocument(): Promise<PickedDocument | null> {
             uri: file.uri,
             name: file.name,
             size: file.size || 0,
-            mimeType: file.mimeType || '',
+            mimeType,
             type: docType,
         };
     } catch (error) {
