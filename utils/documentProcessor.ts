@@ -1,6 +1,7 @@
 import { Buffer } from 'buffer';
 import * as FileSystem from 'expo-file-system';
 import { extractTextFromImage } from './ocrProcessor';
+import { extractTextFromPdf } from './pdfOcrProcessor';
 import { cleanText, extractTextFromFile } from './textChunker';
 
 // Use mammoth browser version for React Native compatibility
@@ -118,6 +119,19 @@ export async function processDocument(
                 }
                 break;
 
+            case 'pdf':
+                try {
+                    console.log('📕 Converting PDF pages to images for OCR...');
+                    const pdfResult = await extractTextFromPdf(fileUri);
+                    text = pdfResult.text;
+                    pageCount = pdfResult.pageCount;
+                    console.log(`✅ PDF OCR complete: ${text.length} characters from ${pageCount} pages`);
+                } catch (error) {
+                    console.error('❌ PDF OCR processing error:', error);
+                    throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+                break;
+
             case 'jpg':
             case 'jpeg':
             case 'png':
@@ -155,12 +169,12 @@ export async function processDocument(
  * Validate that document processing is supported for file type
  */
 export function isProcessingSupported(fileType: string): boolean {
-    return ['txt', 'docx', 'doc', 'xlsx', 'xls', 'jpg', 'jpeg', 'png', 'heic', 'webp'].includes(fileType);
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls', 'pdf', 'jpg', 'jpeg', 'png', 'heic', 'webp'].includes(fileType);
 }
 
 /**
  * Get list of supported file types
  */
 export function getSupportedFileTypes(): string[] {
-    return ['txt', 'docx', 'doc', 'xlsx', 'xls', 'jpg', 'jpeg', 'png', 'heic', 'webp'];
+    return ['txt', 'docx', 'doc', 'xlsx', 'xls', 'pdf', 'jpg', 'jpeg', 'png', 'heic', 'webp'];
 }

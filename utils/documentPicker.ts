@@ -5,7 +5,7 @@ export interface PickedDocument {
     name: string;
     size: number;
     mimeType: string;
-    type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt' | 'jpg' | 'jpeg' | 'png' | 'heic' | 'webp';
+    type: 'xlsx' | 'xls' | 'doc' | 'docx' | 'txt' | 'pdf' | 'jpg' | 'jpeg' | 'png' | 'heic' | 'webp';
 }
 
 const SUPPORTED_TYPES = {
@@ -14,6 +14,7 @@ const SUPPORTED_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx' as const,
     'application/vnd.ms-excel': 'xls' as const,
     'text/plain': 'txt' as const,
+    'application/pdf': 'pdf' as const,
     'image/jpeg': 'jpeg' as const,
     'image/jpg': 'jpg' as const,
     'image/png': 'png' as const,
@@ -28,6 +29,7 @@ const EXTENSION_TO_TYPE = {
     xlsx: 'xlsx' as const,
     xls: 'xls' as const,
     txt: 'txt' as const,
+    pdf: 'pdf' as const,
     jpg: 'jpg' as const,
     jpeg: 'jpeg' as const,
     png: 'png' as const,
@@ -74,7 +76,7 @@ export async function pickDocument(): Promise<PickedDocument | null> {
 
         if (!docType) {
             throw new Error(
-                `Unsupported file type: ${file.mimeType || file.name}. Supported types: Word, Excel, TXT, and images (JPG, PNG, HEIC, WEBP).`
+                `Unsupported file type: ${file.mimeType || file.name}. Supported types: PDF, Word, Excel, TXT, and images (JPG, PNG, HEIC, WEBP).`
             );
         }
 

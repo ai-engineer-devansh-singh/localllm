@@ -11,7 +11,9 @@ import {
     Alert,
     FlatList,
     KeyboardAvoidingView,
+  Modal,
     Platform,
+  ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -27,8 +29,10 @@ export default function ChatScreen() {
   const [attachedFile, setAttachedFile] = useState<{ name: string; text: string } | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
+  const isPdfType = (fileType: string) => fileType === 'pdf';
   const isImageType = (fileType: string) => ['jpg', 'jpeg', 'png', 'heic', 'webp'].includes(fileType);
 
   const handleAttachFile = async () => {
@@ -39,6 +43,9 @@ export default function ChatScreen() {
       const picked = await pickDocument();
       if (!picked) return;
       setProcessingStatus(
+        isPdfType(picked.type)
+          ? 'Converting PDF pages and extracting text...'
+          :
         isImageType(picked.type)
           ? 'Extracting text from image...'
           : 'Extracting text from document...'
@@ -270,17 +277,13 @@ export default function ChatScreen() {
         {attachedFile && (
           <View style={styles.attachmentBadge}>
             <Ionicons
-              name={isImageType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'image' : 'document-text'}
+              name={isImageType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'image' : isPdfType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'document' : 'document-text'}
               size={14}
               color={darkTheme.colors.primary}
             />
             <TouchableOpacity
               style={styles.attachmentNameTouchable}
-              onPress={() => {
-                const preview = attachedFile.text.slice(0, 800);
-                const truncated = attachedFile.text.length > 800 ? `\n\n… (${attachedFile.text.length} chars total)` : '';
-                Alert.alert(`📄 ${attachedFile.name}`, preview + truncated);
-              }}
+              onPress={() => setIsPreviewVisible(true)}
             >
               <Text style={styles.attachmentName} numberOfLines={1}>
                 {attachedFile.name}
@@ -361,6 +364,40 @@ export default function ChatScreen() {
           <Text style={styles.processingStatus}>{processingStatus}</Text>
         )}
       </View>
+
+      <Modal
+        visible={isPreviewVisible && !!attachedFile}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsPreviewVisible(false)}
+      >
+        <View style={styles.previewOverlay}>
+          <View style={styles.previewContainer}>
+            <View style={styles.previewHeader}>
+              <Text style={styles.previewTitle} numberOfLines={1}>
+                {attachedFile?.name || 'File Preview'}
+              </Text>
+              <TouchableOpacity onPress={() => setIsPreviewVisible(false)}>
+                <Ionicons name="close" size={20} color={darkTheme.colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.previewMeta}>
+              {attachedFile?.text.length || 0} chars extracted
+            </Text>
+
+            <ScrollView
+              style={styles.previewScroll}
+              contentContainerStyle={styles.previewScrollContent}
+              showsVerticalScrollIndicator
+            >
+              <Text style={styles.previewText}>
+                {attachedFile?.text || ''}
+              </Text>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -613,5 +650,53 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: darkTheme.colors.primary,
     flex: 1,
+  },
+  previewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  previewContainer: {
+    maxHeight: '85%',
+    backgroundColor: darkTheme.colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(139, 92, 246, 0.25)',
+    overflow: 'hidden',
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(139, 92, 246, 0.2)',
+  },
+  previewTitle: {
+    flex: 1,
+    marginRight: 12,
+    color: darkTheme.colors.onSurface,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  previewMeta: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    fontSize: 10,
+    color: darkTheme.colors.onSurfaceVariant,
+  },
+  previewScroll: {
+    marginTop: 8,
+  },
+  previewScrollContent: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+  },
+  previewText: {
+    color: darkTheme.colors.onSurface,
+    fontSize: 12,
+    lineHeight: 18,
   },
 });
