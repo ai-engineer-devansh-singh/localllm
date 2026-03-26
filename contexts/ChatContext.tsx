@@ -5,10 +5,16 @@ import { copyDocumentToAppDir, deleteDocument as deleteDocumentFile, getDocument
 import { generateEmbedding, getEmbeddingModel } from '@/utils/embeddingManager';
 import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
-import { chunkText } from '@/utils/textChunker';
-import { deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
+import { chunkText, TextChunk } from '@/utils/textChunker';
+import { cosineSimilarity, deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
 import { cacheSearch, formatSearchResultsForContext, getCachedSearch, performWebSearch } from '@/utils/webSearch';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
+
+export interface AttachedDocumentData {
+  docName: string;
+  chunks: TextChunk[];
+  embeddings: number[][];
+}
 
 interface ChatContextType {
   messages: Message[];
@@ -20,7 +26,9 @@ interface ChatContextType {
   webSearchEnabled: boolean;
   isSearching: boolean;
   hasEmbeddingModel: boolean;
-  sendMessage: (content: string) => Promise<void>;
+  attachedDocumentData: AttachedDocumentData | null;
+  isEmbeddingDocument: boolean;
+  sendMessage: (content: string, attachedDocName?: string) => Promise<void>;
   stopGenerating: () => void;
   clearMessages: () => void;
   refreshModels: () => Promise<void>;
@@ -30,6 +38,8 @@ interface ChatContextType {
   refreshDocuments: () => Promise<void>;
   toggleWebSearch: () => void;
   checkEmbeddingModel: () => Promise<void>;
+  attachDocument: (text: string, name: string) => Promise<void>;
+  clearAttachedDocument: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -44,6 +54,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [hasEmbeddingModel, setHasEmbeddingModel] = useState(false);
+  const [attachedDocumentData, setAttachedDocumentData] = useState<AttachedDocumentData | null>(null);
+  const [isEmbeddingDocument, setIsEmbeddingDocument] = useState(false);
 
   // Load active model, downloaded models, and documents on mount
   useEffect(() => {
@@ -127,7 +139,67 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendMessage = async (content: string) => {
+  /**
+   * Attach a document for in-memory RAG: chunk text and generate embeddings
+   */
+  const attachDocument = async (text: string, name: string): Promise<void> => {
+    if (!hasEmbeddingModel) {
+      throw new Error('Please download an embedding model first from the Models tab');
+    }
+
+    setIsEmbeddingDocument(true);
+    try {
+      console.log('📎 Attaching document for RAG:', name);
+      const chunks = chunkText(text);
+      console.log(`   Created ${chunks.length} chunks`);
+
+      const embeddings: number[][] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        console.log(`   Embedding chunk ${i + 1}/${chunks.length}`);
+        const embedding = await generateEmbedding(chunks[i].text);
+        embeddings.push(embedding);
+      }
+      console.log('✅ All chunk embeddings generated');
+
+      setAttachedDocumentData({ docName: name, chunks, embeddings });
+    } catch (error) {
+      console.error('❌ Error attaching document:', error);
+      setAttachedDocumentData(null);
+      throw error;
+    } finally {
+      setIsEmbeddingDocument(false);
+    }
+  };
+
+  /**
+   * Clear the currently attached document
+   */
+  const clearAttachedDocument = () => {
+    setAttachedDocumentData(null);
+  };
+
+  /**
+   * Search attached document chunks by cosine similarity (in-memory)
+   */
+  const searchAttachedChunks = (
+    queryEmbedding: number[],
+    topK: number = 3
+  ): Array<{ text: string; similarity: number }> => {
+    if (!attachedDocumentData) return [];
+
+    const { chunks, embeddings } = attachedDocumentData;
+    const results = chunks.map((chunk, idx) => ({
+      text: chunk.text,
+      similarity: cosineSimilarity(queryEmbedding, embeddings[idx]),
+    }));
+
+    return results
+      .filter((r) => r.similarity > 0.3)
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
+  };
+
+  const sendMessage = async (content: string, attachedDocName?: string) => {
     if (!activeModel) {
       console.error('❌ No active model selected');
       throw new Error('No active model selected');
@@ -180,17 +252,41 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         console.warn('Failed to format web search results:', error);
       }
     }
+
+    // Search attached document chunks (in-memory RAG)
+    let queryEmbedding: number[] | null = null;
+    if (attachedDocumentData) {
+      try {
+        console.log('📎 Searching attached document for relevant context...');
+        queryEmbedding = await generateEmbedding(content);
+        const attachedChunks = searchAttachedChunks(queryEmbedding, 3);
+        if (attachedChunks.length > 0) {
+          console.log(`✅ Found ${attachedChunks.length} relevant chunks from attached document`);
+          const context = attachedChunks
+            .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
+            .join('\n\n');
+          contextPrefix += `Context from attached document (${attachedDocumentData.docName}):\n${context}\n\n`;
+        } else {
+          console.log('ℹ️ No relevant chunks found in attached document');
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to search attached document:', error);
+      }
+    }
     
-    // Add document context
+    // Add persistent document context
     if (documents.length > 0) {
       try {
         console.log('🔍 Searching documents for relevant context...');
-        const queryEmbedding = await generateEmbedding(content);
-        const similarChunks = await searchSimilarChunks(queryEmbedding, 3);
+        if (!queryEmbedding) {
+          queryEmbedding = await generateEmbedding(content);
+        }
+        const similarChunks = await searchSimilarChunks(queryEmbedding, 2);
+        const relevantChunks = similarChunks.filter((chunk) => chunk.similarity > 0.3);
         
-        if (similarChunks.length > 0) {
-          console.log(`✅ Found ${similarChunks.length} relevant chunks from documents`);
-          const context = similarChunks
+        if (relevantChunks.length > 0) {
+          console.log(`✅ Found ${relevantChunks.length} relevant chunks from documents`);
+          const context = relevantChunks
             .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
             .join('\n\n');
           contextPrefix += `Context from documents:\n${context}\n\n`;
@@ -238,6 +334,7 @@ ${content}`;
       role: 'user',
       content,
       timestamp: Date.now(),
+      attachedDocName: attachedDocName || (attachedDocumentData?.docName),
     };
     
     console.log('📝 Adding user message to chat');
@@ -550,6 +647,8 @@ ${content}`;
         webSearchEnabled,
         isSearching,
         hasEmbeddingModel,
+        attachedDocumentData,
+        isEmbeddingDocument,
         sendMessage,
         stopGenerating,
         clearMessages,
@@ -560,6 +659,8 @@ ${content}`;
         refreshDocuments,
         toggleWebSearch,
         checkEmbeddingModel,
+        attachDocument,
+        clearAttachedDocument,
       }}
     >
       {children}

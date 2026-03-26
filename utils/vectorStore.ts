@@ -148,7 +148,7 @@ export async function getDocumentEmbeddingCount(docId: string): Promise<number> 
 /**
  * Calculate cosine similarity between two vectors
  */
-function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: number[], b: number[]): number {
     if (a.length !== b.length) {
         throw new Error('Vectors must have the same length');
     }

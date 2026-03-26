@@ -24,12 +24,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
-  const { messages, sendMessage, activeModel, isGenerating, clearMessages, webSearchEnabled, isSearching, toggleWebSearch } = useChatContext();
+  const {
+    messages, sendMessage, activeModel, isGenerating, clearMessages,
+    webSearchEnabled, isSearching, toggleWebSearch,
+    attachedDocumentData, isEmbeddingDocument, attachDocument, clearAttachedDocument,
+    hasEmbeddingModel,
+  } = useChatContext();
   const [inputText, setInputText] = useState('');
-  const [attachedFile, setAttachedFile] = useState<{ name: string; text: string } | null>(null);
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [previewText, setPreviewText] = useState('');
   const flatListRef = useRef<FlatList>(null);
 
   const isPdfType = (fileType: string) => fileType === 'pdf';
@@ -51,7 +57,19 @@ export default function ChatScreen() {
           : 'Extracting text from document...'
       );
       const processed = await processDocument(picked.uri, picked.type);
-      setAttachedFile({ name: picked.name, text: processed.text });
+
+      if (!hasEmbeddingModel) {
+        Alert.alert(
+          'Embedding Model Required',
+          'Please download an embedding model from the Models tab to use document Q&A.',
+        );
+        return;
+      }
+
+      setProcessingStatus('Generating embeddings...');
+      await attachDocument(processed.text, picked.name);
+      setAttachedFileName(picked.name);
+      setPreviewText(processed.text);
     } catch (error) {
       Alert.alert(
         'File Error',
@@ -63,21 +81,21 @@ export default function ChatScreen() {
     }
   };
 
-  const handleSend = async () => {
-    if ((!inputText.trim() && !attachedFile) || !activeModel || isGenerating) return;
+  const handleRemoveAttachment = () => {
+    clearAttachedDocument();
+    setAttachedFileName(null);
+    setPreviewText('');
+  };
 
-    let messageToSend = inputText.trim();
-    if (attachedFile) {
-      const fileContext = `[Attached file: ${attachedFile.name}]\n\n${attachedFile.text}`;
-      messageToSend = messageToSend
-        ? `${messageToSend}\n\n${fileContext}`
-        : fileContext;
-    }
+  const handleSend = async () => {
+    if (!inputText.trim() || !activeModel || isGenerating) return;
+
+    const messageToSend = inputText.trim();
     setInputText('');
-    setAttachedFile(null);
+    // Do NOT clear attachment — it stays for follow-up queries
     
     try {
-      await sendMessage(messageToSend);
+      await sendMessage(messageToSend, attachedFileName || undefined);
       // Scroll to bottom after sending
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
@@ -97,6 +115,15 @@ export default function ChatScreen() {
           isUser ? styles.userMessage : styles.aiMessage,
         ]}
       >
+        {/* Show attached document indicator for user messages */}
+        {isUser && item.attachedDocName && (
+          <View style={styles.messageDocBadge}>
+            <Ionicons name="document-text" size={12} color={darkTheme.colors.primary} />
+            <Text style={styles.messageDocName} numberOfLines={1}>
+              {item.attachedDocName}
+            </Text>
+          </View>
+        )}
         <Text
           style={[
             styles.messageText,
@@ -274,23 +301,29 @@ export default function ChatScreen() {
         </View>
         
         {/* Attached file badge */}
-        {attachedFile && (
+        {(attachedFileName || isEmbeddingDocument) && (
           <View style={styles.attachmentBadge}>
-            <Ionicons
-              name={isImageType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'image' : isPdfType(attachedFile.name.split('.').pop()?.toLowerCase() || '') ? 'document' : 'document-text'}
-              size={14}
-              color={darkTheme.colors.primary}
-            />
+            {isEmbeddingDocument ? (
+              <ActivityIndicator size={14} color={darkTheme.colors.primary} />
+            ) : (
+              <Ionicons
+                name={isImageType(attachedFileName!.split('.').pop()?.toLowerCase() || '') ? 'image' : isPdfType(attachedFileName!.split('.').pop()?.toLowerCase() || '') ? 'document' : 'document-text'}
+                size={14}
+                color={darkTheme.colors.primary}
+              />
+            )}
             <TouchableOpacity
               style={styles.attachmentNameTouchable}
               onPress={() => setIsPreviewVisible(true)}
             >
               <Text style={styles.attachmentName} numberOfLines={1}>
-                {attachedFile.name}
+                {isEmbeddingDocument ? 'Processing...' : attachedFileName}
               </Text>
-              <Text style={styles.attachmentChars}>{attachedFile.text.length} chars extracted</Text>
+              {attachedDocumentData && (
+                <Text style={styles.attachmentChars}>{attachedDocumentData.chunks.length} chunks embedded</Text>
+              )}
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setAttachedFile(null)}>
+            <TouchableOpacity onPress={handleRemoveAttachment}>
               <Ionicons name="close-circle" size={16} color={darkTheme.colors.onSurfaceVariant} />
             </TouchableOpacity>
           </View>
@@ -342,16 +375,16 @@ export default function ChatScreen() {
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                (!inputText.trim() && !attachedFile || !activeModel) && styles.sendButtonDisabled,
+                (!inputText.trim() || !activeModel) && styles.sendButtonDisabled,
               ]}
               onPress={handleSend}
-              disabled={(!inputText.trim() && !attachedFile) || !activeModel || isGenerating}
+              disabled={!inputText.trim() || !activeModel || isGenerating}
             >
               <Ionicons
                 name="send"
                 size={22}
                 color={
-                  (inputText.trim() || attachedFile) && activeModel
+                  inputText.trim() && activeModel
                     ? darkTheme.colors.primary
                     : darkTheme.colors.onSurfaceVariant
                 }
@@ -366,7 +399,7 @@ export default function ChatScreen() {
       </View>
 
       <Modal
-        visible={isPreviewVisible && !!attachedFile}
+        visible={isPreviewVisible && !!previewText}
         animationType="slide"
         transparent
         onRequestClose={() => setIsPreviewVisible(false)}
@@ -375,7 +408,7 @@ export default function ChatScreen() {
           <View style={styles.previewContainer}>
             <View style={styles.previewHeader}>
               <Text style={styles.previewTitle} numberOfLines={1}>
-                {attachedFile?.name || 'File Preview'}
+                {attachedFileName || 'File Preview'}
               </Text>
               <TouchableOpacity onPress={() => setIsPreviewVisible(false)}>
                 <Ionicons name="close" size={20} color={darkTheme.colors.onSurfaceVariant} />
@@ -383,7 +416,7 @@ export default function ChatScreen() {
             </View>
 
             <Text style={styles.previewMeta}>
-              {attachedFile?.text.length || 0} chars extracted
+              {previewText.length} chars extracted
             </Text>
 
             <ScrollView
@@ -392,7 +425,7 @@ export default function ChatScreen() {
               showsVerticalScrollIndicator
             >
               <Text style={styles.previewText}>
-                {attachedFile?.text || ''}
+                {previewText}
               </Text>
             </ScrollView>
           </View>
@@ -489,6 +522,23 @@ const styles = StyleSheet.create({
   },
   aiMessageText: {
     color: darkTheme.colors.onSurface,
+  },
+  messageDocBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(139, 92, 246, 0.2)',
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  messageDocName: {
+    fontSize: 9,
+    color: darkTheme.colors.primary,
+    fontWeight: '600',
+    maxWidth: 150,
   },
   emptyStateContainer: {
     flex: 1,

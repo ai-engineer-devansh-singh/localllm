@@ -5,6 +5,7 @@ export interface Message {
   timestamp: number;
   isStreaming?: boolean;
   sources?: SearchSource[];
+  attachedDocName?: string;
 }
 
 export interface SearchSource {

@@ -12,8 +12,8 @@ export interface TextChunk {
     endChar: number;
 }
 
-const DEFAULT_CHUNK_SIZE = 500; // characters
-const DEFAULT_OVERLAP = 50; // characters
+const DEFAULT_CHUNK_SIZE = 200; // characters
+const DEFAULT_OVERLAP = 30; // characters
 
 /**
  * Split text into chunks with overlap
@@ -41,7 +41,7 @@ export function chunkText(
             const lastNewline = chunkText.lastIndexOf('\n');
             const breakPoint = Math.max(lastPeriod, lastNewline);
 
-            if (breakPoint > chunkSize * 0.5) {
+            if (breakPoint > chunkSize * 0.4) {
                 // Only break if we're past halfway
                 chunkText = chunkText.substring(0, breakPoint + 1);
             }
@@ -53,6 +53,10 @@ export function chunkText(
             startChar: startIndex,
             endChar: startIndex + chunkText.length,
         });
+
+        if (endIndex >= text.length) {
+            break;
+        }
 
         // Move start index forward, accounting for overlap
         startIndex += chunkText.length - overlap;

@@ -63,15 +63,15 @@ export async function loadModel(model: Model): Promise<void> {
     const context = await initLlama({
       model: model.localPath,
       use_mlock: false, // Disabled for better memory management
-      n_ctx: 512, // Further reduced for stability on low-memory devices
-      n_batch: 128, // Reduced for memory safety
+      n_ctx: 2048, // Increased to fit RAG context + question + response
+      n_batch: 256, // Better throughput with larger context window
       n_gpu_layers: 0, // CPU only for stability
       n_threads: 2, // Conservative thread count for better stability
     });
     
     loadedModel = { model, context };
     console.log(`✅ Model ${model.name} loaded successfully`);
-    console.log('   Context window:', 512, 'tokens');
+    console.log('   Context window:', 2048, 'tokens');
     console.log('   Threads:', 2);
     console.log('   GPU layers:', 0);
   } catch (error) {
@@ -109,10 +109,10 @@ export async function generateText(
   try {
     console.log('   ⏳ Generating response with llama.rn...');
     
-    // Add context for short, concise answers
-    const contextPrompt = "Answer briefly and concisely in 1-2 sentences. Be direct and to the point.";
+    // Instruct model to prioritize retrieved context when present
+    const contextPrompt = "You are a helpful assistant. Use provided context from documents or web search when available and do not invent facts not supported by the context. Keep answers clear and focused.";
     // Sanitize prompt to prevent injection issues
-    const safePrompt = prompt.replace(/[\r\n]+/g, ' ').trim().substring(0, 500);
+    const safePrompt = prompt.replace(/[\r\n]+/g, ' ').trim().substring(0, 1500);
     const formattedPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${contextPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${safePrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
     
     // Stop tokens for various models
@@ -141,7 +141,7 @@ export async function generateText(
         loadedModel.context.completion(
           {
             prompt: formattedPrompt,
-            n_predict: 100, // Conservative limit
+            n_predict: 256, // Better answer completeness for RAG queries
             temperature: 0.7,
             top_p: 0.9,
             top_k: 20,
