@@ -12,8 +12,8 @@ export interface TextChunk {
     endChar: number;
 }
 
-const DEFAULT_CHUNK_SIZE = 200; // characters
-const DEFAULT_OVERLAP = 30; // characters
+const DEFAULT_CHUNK_SIZE = 512; // characters – larger chunks capture more context
+const DEFAULT_OVERLAP = 50; // characters
 
 /**
  * Split text into chunks with overlap
@@ -35,14 +35,17 @@ export function chunkText(
         const endIndex = Math.min(startIndex + chunkSize, text.length);
         let chunkText = text.substring(startIndex, endIndex);
 
-        // Try to break at sentence boundary if not at end
+        // Try to break at paragraph / sentence boundary if not at end
         if (endIndex < text.length) {
+            const lastParagraph = chunkText.lastIndexOf('\n\n');
             const lastPeriod = chunkText.lastIndexOf('. ');
             const lastNewline = chunkText.lastIndexOf('\n');
-            const breakPoint = Math.max(lastPeriod, lastNewline);
+            // Prefer paragraph > sentence > newline
+            const breakPoint = lastParagraph > chunkSize * 0.3
+                ? lastParagraph
+                : Math.max(lastPeriod, lastNewline);
 
-            if (breakPoint > chunkSize * 0.4) {
-                // Only break if we're past halfway
+            if (breakPoint > chunkSize * 0.3) {
                 chunkText = chunkText.substring(0, breakPoint + 1);
             }
         }

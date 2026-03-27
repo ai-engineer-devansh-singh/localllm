@@ -111,8 +111,8 @@ export async function generateText(
     
     // Instruct model to prioritize retrieved context when present
     const contextPrompt = "You are a helpful assistant. Use provided context from documents or web search when available and do not invent facts not supported by the context. Keep answers clear and focused.";
-    // Sanitize prompt to prevent injection issues
-    const safePrompt = prompt.replace(/[\r\n]+/g, ' ').trim().substring(0, 1500);
+    // Sanitize prompt – preserve newlines for readable RAG context
+    const safePrompt = prompt.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().substring(0, 5000);
     const formattedPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${contextPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${safePrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
     
     // Stop tokens for various models

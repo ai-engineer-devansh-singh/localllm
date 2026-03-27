@@ -5,8 +5,19 @@ import { copyDocumentToAppDir, deleteDocument as deleteDocumentFile, getDocument
 import { generateEmbedding, getEmbeddingModel } from '@/utils/embeddingManager';
 import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
+import {
+  buildRAGPrompt,
+  cacheSummaryContext,
+  classifyQueryIntent,
+  clearSummaryCache,
+  enhanceQueryWithHistory,
+  getCachedSummaryContext,
+  getRetrievalConfig,
+  hybridSearch,
+  ScoredChunk,
+} from '@/utils/ragEngine';
 import { chunkText, TextChunk } from '@/utils/textChunker';
-import { cosineSimilarity, deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
+import { deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
 import { cacheSearch, formatSearchResultsForContext, getCachedSearch, performWebSearch } from '@/utils/webSearch';
 import React, { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 
@@ -162,6 +173,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.log('✅ All chunk embeddings generated');
 
       setAttachedDocumentData({ docName: name, chunks, embeddings });
+      // Pre-cache positional chunks for quick repeat-summary queries
+      cacheSummaryContext(name, chunks);
     } catch (error) {
       console.error('❌ Error attaching document:', error);
       setAttachedDocumentData(null);
@@ -175,28 +188,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    * Clear the currently attached document
    */
   const clearAttachedDocument = () => {
+    if (attachedDocumentData) {
+      clearSummaryCache(attachedDocumentData.docName);
+    }
     setAttachedDocumentData(null);
-  };
-
-  /**
-   * Search attached document chunks by cosine similarity (in-memory)
-   */
-  const searchAttachedChunks = (
-    queryEmbedding: number[],
-    topK: number = 3
-  ): Array<{ text: string; similarity: number }> => {
-    if (!attachedDocumentData) return [];
-
-    const { chunks, embeddings } = attachedDocumentData;
-    const results = chunks.map((chunk, idx) => ({
-      text: chunk.text,
-      similarity: cosineSimilarity(queryEmbedding, embeddings[idx]),
-    }));
-
-    return results
-      .filter((r) => r.similarity > 0.3)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
   };
 
   const sendMessage = async (content: string, attachedDocName?: string) => {
@@ -216,6 +211,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // Perform web search if enabled
     let webSearchResults: any = null;
+    let webContext = '';
     if (webSearchEnabled) {
       try {
         console.log('🌐 Web search enabled, searching...');
@@ -233,83 +229,81 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         
         setIsSearching(false);
+
+        if (webSearchResults && webSearchResults.results.length > 0) {
+          webContext = formatSearchResultsForContext(webSearchResults);
+        }
       } catch (error) {
         console.error('Web search failed:', error);
         setIsSearching(false);
       }
     }
 
-    // RAG: Search for relevant context from documents and web
-    let contextPrefix = '';
-    
-    // Add web search results to context
-    if (webSearchResults && webSearchResults.results.length > 0) {
-      try {
-        const searchContext = formatSearchResultsForContext(webSearchResults);
-        contextPrefix += searchContext + '\n\n';
-        console.log('✅ Added web search context');
-      } catch (error) {
-        console.warn('Failed to format web search results:', error);
-      }
-    }
+    // ─── Smart RAG Pipeline ────────────────────────────────────────────────
+    const hasDoc = !!attachedDocumentData;
+    const intent = classifyQueryIntent(content, hasDoc);
+    const config = getRetrievalConfig(intent);
+    console.log(`🧠 Query intent: ${intent}  (hasDoc=${hasDoc})`);
 
-    // Search attached document chunks (in-memory RAG)
+    // Enhance follow-up queries using conversation history
+    const enhancedQuery = enhanceQueryWithHistory(content, messages);
+
+    // Generate query embedding once and reuse
     let queryEmbedding: number[] | null = null;
+    let docChunks: ScoredChunk[] = [];
+
     if (attachedDocumentData) {
       try {
-        console.log('📎 Searching attached document for relevant context...');
-        queryEmbedding = await generateEmbedding(content);
-        const attachedChunks = searchAttachedChunks(queryEmbedding, 3);
-        if (attachedChunks.length > 0) {
-          console.log(`✅ Found ${attachedChunks.length} relevant chunks from attached document`);
-          const context = attachedChunks
-            .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
-            .join('\n\n');
-          contextPrefix += `Context from attached document (${attachedDocumentData.docName}):\n${context}\n\n`;
+        // For repeat summary queries, use the pre-cached positional context
+        const cached = intent === 'summary' ? getCachedSummaryContext(attachedDocumentData.docName) : null;
+        if (cached) {
+          console.log('📎 Using cached summary context');
+          docChunks = [{ text: cached, chunkIndex: 0, similarity: 1, keywordScore: 0, combinedScore: 1 }];
         } else {
-          console.log('ℹ️ No relevant chunks found in attached document');
+          console.log('📎 Hybrid-searching attached document...');
+          queryEmbedding = await generateEmbedding(enhancedQuery);
+          docChunks = hybridSearch(
+            enhancedQuery,
+            queryEmbedding,
+            attachedDocumentData.chunks,
+            attachedDocumentData.embeddings,
+            config,
+          );
         }
+        console.log(`✅ Found ${docChunks.length} relevant chunks (intent=${intent})`);
       } catch (error) {
         console.warn('⚠️ Failed to search attached document:', error);
       }
     }
-    
+
     // Add persistent document context
+    let persistentChunks: Array<{ text: string; similarity: number }> = [];
     if (documents.length > 0) {
       try {
-        console.log('🔍 Searching documents for relevant context...');
+        console.log('🔍 Searching persistent documents...');
         if (!queryEmbedding) {
-          queryEmbedding = await generateEmbedding(content);
+          queryEmbedding = await generateEmbedding(enhancedQuery);
         }
         const similarChunks = await searchSimilarChunks(queryEmbedding, 2);
-        const relevantChunks = similarChunks.filter((chunk) => chunk.similarity > 0.3);
-        
-        if (relevantChunks.length > 0) {
-          console.log(`✅ Found ${relevantChunks.length} relevant chunks from documents`);
-          const context = relevantChunks
-            .map((chunk, idx) => `[${idx + 1}] ${chunk.text}`)
-            .join('\n\n');
-          contextPrefix += `Context from documents:\n${context}\n\n`;
-        } else {
-          console.log('ℹ️ No relevant document chunks found');
+        persistentChunks = similarChunks.filter((chunk) => chunk.similarity > 0.3);
+        if (persistentChunks.length > 0) {
+          console.log(`✅ Found ${persistentChunks.length} persistent doc chunks`);
         }
       } catch (error) {
         console.warn('⚠️ Failed to retrieve document context:', error);
       }
     }
-    
-    // Prepare final prompt
-    let finalPrompt = content;
-    if (contextPrefix) {
-      finalPrompt = `You are a helpful AI assistant. Below is information retrieved from web searches and documents to help answer the user's question. Use this information to provide an accurate and detailed response.
 
-${contextPrefix}
-Based on the information above, please answer the following question:
-${content}`;
-      console.log('📝 Using context-enhanced prompt');
-    } else {
-      console.log('📝 Using direct prompt (no context)');
-    }
+    // Build intent-specific prompt
+    const finalPrompt = buildRAGPrompt(
+      intent,
+      content,
+      docChunks,
+      attachedDocumentData?.docName,
+      persistentChunks,
+      webContext || undefined,
+    );
+    console.log(`📝 Built ${intent} prompt (${finalPrompt.length} chars)`);
     
     // Ensure model is loaded before generating
     if (!isModelLoaded() && activeModel.localPath && activeModel.localPath.length > 0) {
