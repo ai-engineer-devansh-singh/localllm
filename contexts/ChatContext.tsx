@@ -10,6 +10,7 @@ import {
   cacheSummaryContext,
   classifyQueryIntent,
   clearSummaryCache,
+  createDefaultContext,
   enhanceQueryWithHistory,
   getCachedSummaryContext,
   getRetrievalConfig,
@@ -294,6 +295,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    // Fallback context from the first 2 chunks — used when similarity search
+    // yields nothing (e.g. vague opener like "tell me about this file")
+    const defaultContext = attachedDocumentData
+      ? createDefaultContext(attachedDocumentData.chunks)
+      : undefined;
+
     // Build intent-specific prompt
     const finalPrompt = buildRAGPrompt(
       intent,
@@ -302,6 +309,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       attachedDocumentData?.docName,
       persistentChunks,
       webContext || undefined,
+      defaultContext,
     );
     console.log(`📝 Built ${intent} prompt (${finalPrompt.length} chars)`);
     

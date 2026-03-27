@@ -6,7 +6,7 @@ import { cosineSimilarity } from './vectorStore';
 
 export type QueryIntent = 'summary' | 'qa' | 'extraction' | 'comparison' | 'general';
 
-const SUMMARY_PATTERNS = /\b(summar|overview|brief|gist|outline|recap|tl;?dr|what('?s| is) (this|the|it) about|main (point|idea|theme)|key (point|takeaway|finding)|give me .* overview|high[- ]level)\b/i;
+const SUMMARY_PATTERNS = /\b(summar|overview|brief|gist|outline|recap|tl;?dr|what('?s| is) (this|the|it) about|main (point|idea|theme)|key (point|takeaway|finding)|give me .* overview|high[- ]level|tell (me )?about (this|the) (doc|file|document|text|paper|article)|describe (this|the) (doc|file|document|text|paper|article)|explain (this|the) (doc|file|document|text|paper|article)|what (does|do|is) (this|the) (doc|file|document|text|paper|article))\b/i;
 const EXTRACTION_PATTERNS = /\b(extract|list (all|the|every)|find (all|every)|what are (the|all)|give me (the|all)|show (all|me)|enumerate|name (all|the)|how many|mention|pick out|pull out|identify (all|the|every))\b/i;
 const COMPARISON_PATTERNS = /\b(compar|differ|similar|versus|vs\.?|contrast|between .+ and|which (is|are) (better|worse|more|less)|pros and cons|advantage|disadvantage)\b/i;
 const QA_PATTERNS = /\b(what|who|when|where|why|how|which|is (it|there|this)|does|did|can|could|should|would|explain|describe|tell me|define|meaning|elaborate|clarify)\b/i;
@@ -234,6 +234,7 @@ export function buildRAGPrompt(
     docName?: string,
     persistentChunks?: Array<{ text: string; similarity: number }>,
     webContext?: string,
+    defaultContext?: string,
 ): string {
     const template = PROMPT_TEMPLATES[intent];
 
@@ -246,6 +247,8 @@ export function buildRAGPrompt(
         if (docChunks.length > 0) {
             const docCtx = docChunks.map((c, i) => `[${i + 1}] ${c.text}`).join('\n\n');
             contextSection += `\n\nDocument context${docName ? ` (${docName})` : ''}:\n${docCtx}`;
+        } else if (defaultContext) {
+            contextSection += `\n\nDocument context${docName ? ` (${docName})` : ''}:\n${defaultContext}`;
         }
         if (persistentChunks && persistentChunks.length > 0) {
             const pCtx = persistentChunks.map((c, i) => `[${i + 1}] ${c.text}`).join('\n\n');
@@ -266,7 +269,10 @@ export function buildRAGPrompt(
     let context = '';
     if (docChunks.length > 0) {
         context = docChunks.map((c, i) => `[${i + 1}] ${c.text}`).join('\n\n');
+    } else if (defaultContext) {
+        context = defaultContext;
     }
+
     if (persistentChunks && persistentChunks.length > 0) {
         const pCtx = persistentChunks.map((c, i) => `[${docChunks.length + i + 1}] ${c.text}`).join('\n\n');
         context += (context ? '\n\n' : '') + pCtx;
@@ -344,6 +350,18 @@ export function cacheSummaryContext(docName: string, chunks: TextChunk[]): void 
 
 export function getCachedSummaryContext(docName: string): string | null {
     return summaryCache.get(docName) || null;
+}
+
+/**
+ * Build a default context string from the first N chunks of a document.
+ * Used as a fallback when similarity search returns no relevant chunks,
+ * so the model always has some grounding in what the document is about.
+ */
+export function createDefaultContext(chunks: TextChunk[], numChunks: number = 2): string {
+    return chunks
+        .slice(0, numChunks)
+        .map(c => c.text)
+        .join('\n\n');
 }
 
 export function clearSummaryCache(docName?: string): void {
