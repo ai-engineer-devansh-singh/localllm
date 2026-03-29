@@ -83,13 +83,33 @@ export async function extractTextFromFile(fileUri: string): Promise<string> {
 }
 
 /**
- * Clean and normalize text
+ * Clean and normalize text by removing unwanted whitespace and blank lines.
+ * Handles output from DOCX (mammoth), XLSX, PDF OCR, and image OCR.
  */
 export function cleanText(text: string): string {
     return text
-        .replace(/\r\n/g, '\n') // Normalize line endings
-        .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
-        .replace(/\t/g, ' ') // Replace tabs with spaces
-        .replace(/  +/g, ' ') // Replace multiple spaces with single space
+        // Normalize all line endings to \n
+        .replace(/\r\n/g, '\n')
+        .replace(/\r/g, '\n')
+        // Replace non-breaking space and other Unicode whitespace with a regular space
+        .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, ' ')
+        // Remove zero-width / invisible characters (common in copy-pasted / OCR text)
+        .replace(/[\u200b-\u200d\u2060\ufeff]/g, '')
+        // Replace tabs with a single space
+        .replace(/\t/g, ' ')
+        // Trim each line and collapse runs of spaces within a line to one
+        .split('\n')
+        .map(line => line.trim().replace(/ {2,}/g, ' '))
+        // Allow at most one consecutive blank line (paragraph separator)
+        .reduce<string[]>((acc, line) => {
+            if (line.length > 0) {
+                acc.push(line);
+            } else if (acc.length > 0 && acc[acc.length - 1].length > 0) {
+                acc.push(''); // first blank line after content – keep as paragraph break
+            }
+            // drop additional consecutive blank lines
+            return acc;
+        }, [])
+        .join('\n')
         .trim();
 }
