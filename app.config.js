@@ -73,6 +73,12 @@ module.exports = {
       googleSearchEngineId: process.env.GOOGLE_SEARCH_ENGINE_ID,
       openaiApiKey: process.env.OPENAI_API_KEY
     },
-    owner: "devanshsingh2199"
+    owner: "devanshsingh2199",
+    updates: {
+      url: "https://u.expo.dev/e7c28838-5df3-49d0-8f61-ade5cb31c80c"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    }
   }
 };
