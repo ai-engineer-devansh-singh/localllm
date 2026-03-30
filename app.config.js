@@ -67,11 +67,12 @@ module.exports = {
         origin: false
       },
       eas: {
-        projectId: "c6541917-91e3-4f7e-96e9-dff5c6578ce2"
+        projectId: "e7c28838-5df3-49d0-8f61-ade5cb31c80c"
       },
       googleApiKey: process.env.GOOGLE_SEARCH_API_KEY,
-      googleSearchEngineId: process.env.GOOGLE_SEARCH_ENGINE_ID
+      googleSearchEngineId: process.env.GOOGLE_SEARCH_ENGINE_ID,
+      openaiApiKey: process.env.OPENAI_API_KEY
     },
-    owner: "devanshsingh772"
+    owner: "devanshsingh2199"
   }
 };

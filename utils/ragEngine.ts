@@ -38,35 +38,35 @@ interface RetrievalConfig {
 const RETRIEVAL_CONFIGS: Record<QueryIntent, RetrievalConfig> = {
     summary: {
         topK: 6,
-        similarityThreshold: 0.1,
+        similarityThreshold: 0.05,  // Lowered from 0.1 - be permissive for summaries
         keywordWeight: 0.1,
         semanticWeight: 0.9,
         includePositional: true,
     },
     qa: {
         topK: 3,
-        similarityThreshold: 0.25,
+        similarityThreshold: 0.15,  // Lowered from 0.25 - allow more diverse matches
         keywordWeight: 0.3,
         semanticWeight: 0.7,
         includePositional: false,
     },
     extraction: {
         topK: 5,
-        similarityThreshold: 0.15,
+        similarityThreshold: 0.10,  // Lowered from 0.15 - be permissive for extraction
         keywordWeight: 0.4,
         semanticWeight: 0.6,
         includePositional: false,
     },
     comparison: {
         topK: 4,
-        similarityThreshold: 0.2,
+        similarityThreshold: 0.15,  // Lowered from 0.2 - accept broader matches
         keywordWeight: 0.3,
         semanticWeight: 0.7,
         includePositional: false,
     },
     general: {
         topK: 3,
-        similarityThreshold: 0.3,
+        similarityThreshold: 0.20,  // Lowered from 0.3 - more inclusive default
         keywordWeight: 0.3,
         semanticWeight: 0.7,
         includePositional: false,
@@ -119,6 +119,9 @@ export interface ScoredChunk {
 /**
  * Hybrid search combining semantic (embedding) + keyword (BM25-lite) scoring.
  * Adapts retrieval strategy based on query intent.
+ * 
+ * GUARANTEE: Always returns at least 1 chunk if available, falling back to top-scoring
+ * if similarity threshold filters everything out.
  */
 export function hybridSearch(
     query: string,
@@ -127,6 +130,11 @@ export function hybridSearch(
     embeddings: number[][],
     config: RetrievalConfig
 ): ScoredChunk[] {
+    if (chunks.length === 0) {
+        console.warn('⚠️ hybridSearch: No chunks available');
+        return [];
+    }
+
     const results: ScoredChunk[] = chunks.map((chunk, idx) => {
         const semantic = cosineSimilarity(queryEmbedding, embeddings[idx]);
         const keyword = keywordScore(query, chunk.text);
@@ -142,6 +150,9 @@ export function hybridSearch(
     });
 
     const sorted = results.sort((a, b) => b.combinedScore - a.combinedScore);
+    
+    console.log(`📊 Hybrid search: scoring ${results.length} chunks`);
+    console.log(`   Top scores: [${sorted.slice(0, 3).map((r, i) => `${i + 1}: ${(r.combinedScore * 100).toFixed(0)}%`).join(', ')}]`);
 
     // For summary intent, ensure beginning and ending chunks are included
     if (config.includePositional && chunks.length > 2) {
@@ -164,12 +175,25 @@ export function hybridSearch(
         }
 
         // Sort by chunk order for coherent reading in summary mode
-        return topResults.sort((a, b) => a.chunkIndex - b.chunkIndex);
+        const result = topResults.sort((a, b) => a.chunkIndex - b.chunkIndex);
+        console.log(`✅ Positional retrieval: ${result.length} chunks (summary mode)`);
+        return result;
     }
 
-    return sorted
-        .filter(r => r.combinedScore > config.similarityThreshold)
-        .slice(0, config.topK);
+    // Apply threshold filtering
+    let filtered = sorted.filter(r => r.combinedScore > config.similarityThreshold);
+    
+    console.log(`🔍 After threshold filter (>${config.similarityThreshold}): ${filtered.length} chunks`);
+    
+    // CRITICAL: If threshold filters out everything, return top chunk anyway
+    if (filtered.length === 0 && sorted.length > 0) {
+        console.warn(`⚠️ Threshold too high! Returning top chunk instead of empty result`);
+        filtered = [sorted[0]];
+    }
+    
+    const final = filtered.slice(0, config.topK);
+    console.log(`✅ Final result: ${final.length} chunks returned`);
+    return final;
 }
 
 // ─── Intent-Specific Prompt Templates ───────────────────────────────────────
@@ -226,6 +250,9 @@ function truncateContext(text: string): string {
 
 /**
  * Build a prompt tailored to the query intent, combining all context sources.
+ * 
+ * CRITICAL GUARANTEE: If document is attached, at least one chunk will be included
+ * in the final prompt (either from search results or fallback context).
  */
 export function buildRAGPrompt(
     intent: QueryIntent,
@@ -267,10 +294,18 @@ export function buildRAGPrompt(
 
     // For doc-specific intents (summary, qa, extraction, comparison)
     let context = '';
+    
+    // CRITICAL: Include retrieved chunks
     if (docChunks.length > 0) {
         context = docChunks.map((c, i) => `[${i + 1}] ${c.text}`).join('\n\n');
-    } else if (defaultContext) {
+        console.log(`✅ Using ${docChunks.length} retrieved chunks in prompt`);
+    } else if (defaultContext && defaultContext.trim().length > 0) {
+        // FALLBACK: If retrieval failed, use default context
         context = defaultContext;
+        console.log(`⚠️ No retrieved chunks, using default context fallback`);
+    } else {
+        // LAST RESORT: If no chunks available, still build prompt but note it
+        console.warn(`❌ NO CHUNKS AVAILABLE for document "${docName}"`);
     }
 
     if (persistentChunks && persistentChunks.length > 0) {
@@ -281,11 +316,61 @@ export function buildRAGPrompt(
         context += (context ? '\n\n' : '') + `Web results:\n${webContext}`;
     }
 
+    // Log final context stats
+    console.log(`📝 Prompt context: ${context.length} chars`);
+    
     return template
         .replace('{docName}', docName || 'document')
         .replace('{context}', truncateContext(context))
         .replace('{query}', query);
 }
+
+// ─── Query Embedding Cache ──────────────────────────────────────────────────
+
+interface CacheEntry {
+    embedding: number[];
+    timestamp: number;
+}
+
+const queryEmbeddingCache = new Map<string, CacheEntry>();
+const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
+const MAX_CACHE_SIZE = 100;
+
+/**
+ * Simple LRU cache for query embeddings to avoid regenerating same queries
+ */
+function cacheQueryEmbedding(query: string, embedding: number[]): void {
+    // Clean old entries if cache is full
+    if (queryEmbeddingCache.size >= MAX_CACHE_SIZE) {
+        const oldestKey = queryEmbeddingCache.keys().next().value;
+        if (oldestKey) queryEmbeddingCache.delete(oldestKey);
+    }
+    
+    queryEmbeddingCache.set(query, {
+        embedding,
+        timestamp: Date.now()
+    });
+}
+
+function getCachedQueryEmbedding(query: string): number[] | null {
+    const entry = queryEmbeddingCache.get(query);
+    if (!entry) return null;
+    
+    // Check if cache entry is expired
+    if (Date.now() - entry.timestamp > CACHE_TTL) {
+        queryEmbeddingCache.delete(query);
+        return null;
+    }
+    
+    return entry.embedding;
+}
+
+function clearQueryEmbeddingCache(): void {
+    queryEmbeddingCache.clear();
+}
+
+// Export caching functions for use in ChatContext
+export { cacheQueryEmbedding, getCachedQueryEmbedding, clearQueryEmbeddingCache };
 
 // ─── Multi-Turn Query Enhancement ───────────────────────────────────────────
 
@@ -356,12 +441,22 @@ export function getCachedSummaryContext(docName: string): string | null {
  * Build a default context string from the first N chunks of a document.
  * Used as a fallback when similarity search returns no relevant chunks,
  * so the model always has some grounding in what the document is about.
+ * 
+ * GUARANTEE: Returns non-empty string if any chunks exist.
  */
 export function createDefaultContext(chunks: TextChunk[], numChunks: number = 2): string {
-    return chunks
-        .slice(0, numChunks)
+    if (chunks.length === 0) {
+        console.warn('⚠️ createDefaultContext: No chunks available');
+        return '';
+    }
+    
+    const contextChunks = chunks.slice(0, Math.min(numChunks, chunks.length));
+    const context = contextChunks
         .map(c => c.text)
         .join('\n\n');
+    
+    console.log(`📋 Created default context from ${contextChunks.length} chunks (${context.length} chars)`);
+    return context;
 }
 
 export function clearSummaryCache(docName?: string): void {

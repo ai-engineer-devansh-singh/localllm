@@ -3,6 +3,16 @@ import * as SQLite from 'expo-sqlite';
 
 const DB_NAME = 'vector_store.db';
 
+interface EmbeddingRow {
+    id: string;
+    doc_id: string;
+    chunk_index: number;
+    text: string;
+    embedding: string;
+    metadata: string | null;
+    created_at: number;
+}
+
 let db: SQLite.SQLiteDatabase | null = null;
 
 /**
@@ -63,7 +73,7 @@ export async function storeEmbedding(chunk: Chunk, docId: string): Promise<void>
 
 /**
  * Search for similar chunks using cosine similarity
- * Note: This is a simple implementation. For better performance, consider using a dedicated vector DB
+ * Optimized with pre-filtering by doc_id and early termination
  */
 export async function searchSimilarChunks(
     queryEmbedding: number[],
@@ -83,26 +93,51 @@ export async function searchSimilarChunks(
             params.push(docId);
         }
 
-        const rows = await db!.getAllAsync(query, params);
+        const rows = await db!.getAllAsync<EmbeddingRow>(query, params);
+
+        if (rows.length === 0) {
+            return [];
+        }
+
+        // Pre-filter: Calculate norms once for query embedding
+        const queryNorm = Math.sqrt(queryEmbedding.reduce((sum, val) => sum + val * val, 0));
+        if (queryNorm === 0) return [];
 
         // Calculate cosine similarity for each chunk
-        const results = rows.map((row: any) => {
+        const results: Array<Chunk & { similarity: number }> = [];
+        let threshold = 0; // Dynamic threshold for early termination
+
+        for (const row of rows) {
             const embedding = JSON.parse(row.embedding);
-            const similarity = cosineSimilarity(queryEmbedding, embedding);
+            const similarity = cosineSimilarity(queryEmbedding, embedding, queryNorm);
 
-            return {
-                id: row.id,
-                docId: row.doc_id,
-                text: row.text,
-                chunkIndex: row.chunk_index,
-                embedding,
-                metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-                similarity,
-            };
-        });
+            // Only include if above threshold
+            if (similarity >= threshold) {
+                results.push({
+                    id: row.id,
+                    docId: row.doc_id,
+                    text: row.text,
+                    chunkIndex: row.chunk_index,
+                    embedding,
+                    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+                    similarity,
+                });
+            }
 
-        // Sort by similarity and return top K
-        return results.sort((a, b) => b.similarity - a.similarity).slice(0, topK);
+            // Dynamic threshold: if we have enough results, increase threshold
+            if (results.length > topK * 2) {
+                results.sort((a, b) => b.similarity - a.similarity);
+                threshold = results[topK - 1]?.similarity || 0;
+                // Keep only top K candidates
+                if (results.length > topK * 2) {
+                    results.splice(topK * 2);
+                }
+            }
+        }
+
+        // Final sort and return top K
+        results.sort((a, b) => b.similarity - a.similarity);
+        return results.slice(0, topK);
     } catch (error) {
         console.error('Error searching similar chunks:', error);
         return [];
@@ -147,23 +182,24 @@ export async function getDocumentEmbeddingCount(docId: string): Promise<number> 
 
 /**
  * Calculate cosine similarity between two vectors
+ * Optimized version with optional pre-calculated norm
  */
-export function cosineSimilarity(a: number[], b: number[]): number {
+export function cosineSimilarity(a: number[], b: number[], aNorm?: number): number {
     if (a.length !== b.length) {
         throw new Error('Vectors must have the same length');
     }
 
     let dotProduct = 0;
-    let normA = 0;
+    let normA = aNorm !== undefined ? aNorm : 0;
     let normB = 0;
 
     for (let i = 0; i < a.length; i++) {
         dotProduct += a[i] * b[i];
-        normA += a[i] * a[i];
+        if (aNorm === undefined) normA += a[i] * a[i];
         normB += b[i] * b[i];
     }
 
-    normA = Math.sqrt(normA);
+    if (aNorm === undefined) normA = Math.sqrt(normA);
     normB = Math.sqrt(normB);
 
     if (normA === 0 || normB === 0) {

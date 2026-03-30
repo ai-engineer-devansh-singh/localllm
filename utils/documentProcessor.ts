@@ -158,6 +158,15 @@ export async function processDocument(
     const cleanedText = cleanText(text);
     const wordCount = cleanedText.split(/\s+/).filter(word => word.length > 0).length;
 
+    // Validate that we extracted some meaningful content
+    if (cleanedText.trim().length === 0) {
+        throw new Error('Document is empty or contains no readable text');
+    }
+
+    if (wordCount < 2) {
+        throw new Error('Document contains too little text to process');
+    }
+
     return {
         text: cleanedText,
         pageCount: pageCount > 0 ? pageCount : undefined,

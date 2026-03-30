@@ -1,5 +1,6 @@
 import { Model } from '@/types/chat';
 import { initLlama, LlamaContext } from 'llama.rn';
+import { SYSTEM_PROMPT } from './openaiService';
 
 /**
  * GGUF model inference using llama.rn
@@ -59,21 +60,37 @@ export async function loadModel(model: Model): Promise<void> {
       throw new Error('Invalid model path');
     }
     
-    // Optimized settings for faster inference on mobile
-    const context = await initLlama({
-      model: model.localPath,
-      use_mlock: false, // Disabled for better memory management
-      n_ctx: 2048, // Increased to fit RAG context + question + response
-      n_batch: 256, // Better throughput with larger context window
-      n_gpu_layers: 0, // CPU only for stability
-      n_threads: 2, // Conservative thread count for better stability
-    });
+    // Try GPU-accelerated loading first, fall back to CPU-only
+    let context: LlamaContext;
+    let gpuLayers = 32; // try offloading first N layers to GPU (Metal/Vulkan)
+    try {
+      context = await initLlama({
+        model: model.localPath,
+        use_mlock: true,      // pin weights in RAM – avoids page-in stalls
+        n_ctx: 2048,
+        n_batch: 512,         // larger batch → better throughput
+        n_gpu_layers: gpuLayers,
+        n_threads: 4,         // use more CPU cores
+      });
+      console.log(`   GPU offloading enabled (${gpuLayers} layers)`);
+    } catch {
+      console.warn('⚠️ GPU init failed, falling back to CPU-only...');
+      gpuLayers = 0;
+      context = await initLlama({
+        model: model.localPath,
+        use_mlock: true,
+        n_ctx: 2048,
+        n_batch: 512,
+        n_gpu_layers: 0,
+        n_threads: 4,
+      });
+    }
     
     loadedModel = { model, context };
     console.log(`✅ Model ${model.name} loaded successfully`);
     console.log('   Context window:', 2048, 'tokens');
-    console.log('   Threads:', 2);
-    console.log('   GPU layers:', 0);
+    console.log('   Threads:', 4);
+    console.log('   GPU layers:', gpuLayers);
   } catch (error) {
     console.error('❌ Error loading model:', error);
     loadedModel = null; // Clear on error
@@ -109,11 +126,9 @@ export async function generateText(
   try {
     console.log('   ⏳ Generating response with llama.rn...');
     
-    // Instruct model to prioritize retrieved context when present
-    const contextPrompt = "You are a helpful assistant. Use provided context from documents or web search when available and do not invent facts not supported by the context. Keep answers clear and focused.";
     // Sanitize prompt – preserve newlines for readable RAG context
     const safePrompt = prompt.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().substring(0, 5000);
-    const formattedPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${contextPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${safePrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
+    const formattedPrompt = `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${SYSTEM_PROMPT}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${safePrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
     
     // Stop tokens for various models
     const stopTokens = [
@@ -141,10 +156,10 @@ export async function generateText(
         loadedModel.context.completion(
           {
             prompt: formattedPrompt,
-            n_predict: 256, // Better answer completeness for RAG queries
+            n_predict: 256,
             temperature: 0.7,
+            top_k: 40,          // wider pool reduces stalls vs top_k:20
             top_p: 0.9,
-            top_k: 20,
             stop: stopTokens,
           },
           // Streaming callback - emit tokens in real-time

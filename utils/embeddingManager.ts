@@ -256,16 +256,31 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embeddings for multiple texts (batch)
+ * Generate embeddings for multiple texts - Sequential processing to avoid memory crashes
+ * Processes one embedding at a time with periodic yield to prevent freezing UI
  */
 export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
     const embeddings: number[][] = [];
-
-    for (const text of texts) {
-        const embedding = await generateEmbedding(text);
-        embeddings.push(embedding);
+    
+    // Process sequentially to avoid memory spikes and context corruption
+    for (let i = 0; i < texts.length; i++) {
+        try {
+            console.log(`   ⏳ Embedding text ${i + 1}/${texts.length}...`);
+            const embedding = await generateEmbedding(texts[i]);
+            embeddings.push(embedding);
+            
+            // Yield every 5 embeddings to keep UI responsive
+            if ((i + 1) % 5 === 0) {
+                console.log(`   ✅ ${i + 1}/${texts.length} embeddings complete`);
+                await new Promise(resolve => setTimeout(resolve, 10)); // Small delay for UI updates
+            }
+        } catch (error) {
+            console.error(`   ❌ Error embedding text ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(`Failed to embed text chunk ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
     }
 
+    console.log(`✅ All ${texts.length} embeddings generated successfully`);
     return embeddings;
 }
 

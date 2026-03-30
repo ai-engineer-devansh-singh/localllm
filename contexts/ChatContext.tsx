@@ -2,13 +2,27 @@ import { Document, Message, Model } from '@/types/chat';
 import { pickDocument } from '@/utils/documentPicker';
 import { processDocument } from '@/utils/documentProcessor';
 import { copyDocumentToAppDir, deleteDocument as deleteDocumentFile, getDocuments, saveDocument } from '@/utils/documentStorage';
-import { generateEmbedding, getEmbeddingModel } from '@/utils/embeddingManager';
+import { generateEmbedding, getEmbeddingModel, generateEmbeddings, loadEmbeddingModel } from '@/utils/embeddingManager';
 import { getActiveModel, getDownloadedModels } from '@/utils/modelManager';
 import { generateText, isModelLoaded, loadModel, stopGeneration } from '@/utils/onnxInference';
+import { generateWithOpenAI, getOpenAIKey, isExpoGo } from '@/utils/openaiService';
+
+/** Virtual model entry shown when running in Expo Go (uses OpenAI API). */
+const OPENAI_VIRTUAL_MODEL: Model = {
+  id: 'openai-gpt4o-mini',
+  name: 'GPT-4o Mini (OpenAI)',
+  size: 0,
+  downloadUrl: '',
+  isDownloaded: true,
+  isActive: true,
+  description: 'Cloud inference via OpenAI API — Expo testing mode',
+  category: ['cloud', 'openai'],
+};
 import {
   buildRAGPrompt,
   cacheSummaryContext,
   classifyQueryIntent,
+  clearQueryEmbeddingCache,
   clearSummaryCache,
   createDefaultContext,
   enhanceQueryWithHistory,
@@ -16,6 +30,8 @@ import {
   getRetrievalConfig,
   hybridSearch,
   ScoredChunk,
+  getCachedQueryEmbedding,
+  cacheQueryEmbedding,
 } from '@/utils/ragEngine';
 import { chunkText, TextChunk } from '@/utils/textChunker';
 import { deleteDocumentEmbeddings, initializeVectorStore, searchSimilarChunks, storeEmbedding } from '@/utils/vectorStore';
@@ -40,6 +56,8 @@ interface ChatContextType {
   hasEmbeddingModel: boolean;
   attachedDocumentData: AttachedDocumentData | null;
   isEmbeddingDocument: boolean;
+  /** True when running in Expo Go — inference is handled by OpenAI API. */
+  isExpoMode: boolean;
   sendMessage: (content: string, attachedDocName?: string) => Promise<void>;
   stopGenerating: () => void;
   clearMessages: () => void;
@@ -69,12 +87,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [attachedDocumentData, setAttachedDocumentData] = useState<AttachedDocumentData | null>(null);
   const [isEmbeddingDocument, setIsEmbeddingDocument] = useState(false);
 
+  const isExpoMode = isExpoGo();
+
   // Load active model, downloaded models, and documents on mount
   useEffect(() => {
     loadInitialData();
     loadDocuments();
     checkEmbeddingModel();
     initializeVectorStore().catch(console.error);
+    
+    // Pre-load embedding model in background for faster first query
+    console.log('🚀 Pre-loading embedding model in background...');
+    loadEmbeddingModel().catch(err => {
+      console.warn('⚠️ Embedding model pre-load failed (non-critical):', err);
+    });
   }, []);
 
   const loadDocuments = async () => {
@@ -87,6 +113,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   };
 
   const loadInitialData = async () => {
+    if (isExpoMode) {
+      // In Expo Go, local models cannot run — use the virtual OpenAI model.
+      console.log('🌐 Expo Go detected — using OpenAI API for inference');
+      setActiveModel(OPENAI_VIRTUAL_MODEL);
+      setDownloadedModels([]);
+      return;
+    }
+
     try {
       const [active, downloaded] = await Promise.all([
         getActiveModel(),
@@ -153,6 +187,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   /**
    * Attach a document for in-memory RAG: chunk text and generate embeddings
+   * Sequential embedding generation to prevent memory crashes
    */
   const attachDocument = async (text: string, name: string): Promise<void> => {
     if (!hasEmbeddingModel) {
@@ -162,16 +197,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsEmbeddingDocument(true);
     try {
       console.log('📎 Attaching document for RAG:', name);
+      
+      // Ensure embedding model is loaded before generating embeddings
+      console.log('   Verifying embedding model is loaded...');
+      try {
+        await loadEmbeddingModel();
+        console.log('   ✅ Embedding model ready');
+      } catch (error) {
+        throw new Error(`Failed to load embedding model: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+      
       const chunks = chunkText(text);
       console.log(`   Created ${chunks.length} chunks`);
 
-      const embeddings: number[][] = [];
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(`   Embedding chunk ${i + 1}/${chunks.length}`);
-        const embedding = await generateEmbedding(chunks[i].text);
-        embeddings.push(embedding);
-      }
-      console.log('✅ All chunk embeddings generated');
+      // Generate embeddings sequentially to avoid crashes
+      console.log('   Starting embeddings generation (sequential mode)...');
+      const embeddings = await generateEmbeddings(chunks.map(c => c.text));
+      console.log(`✅ All ${chunks.length} chunk embeddings generated`);
 
       setAttachedDocumentData({ docName: name, chunks, embeddings });
       // Pre-cache positional chunks for quick repeat-summary queries
@@ -262,7 +304,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           docChunks = [{ text: cached, chunkIndex: 0, similarity: 1, keywordScore: 0, combinedScore: 1 }];
         } else {
           console.log('📎 Hybrid-searching attached document...');
-          queryEmbedding = await generateEmbedding(enhancedQuery);
+          
+          // Check cache first before generating embedding
+          const cachedEmbedding = getCachedQueryEmbedding(enhancedQuery);
+          if (cachedEmbedding) {
+            console.log('   Using cached query embedding');
+            queryEmbedding = cachedEmbedding;
+          } else {
+            queryEmbedding = await generateEmbedding(enhancedQuery);
+            cacheQueryEmbedding(enhancedQuery, queryEmbedding);
+          }
+          
           docChunks = hybridSearch(
             enhancedQuery,
             queryEmbedding,
@@ -283,7 +335,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       try {
         console.log('🔍 Searching persistent documents...');
         if (!queryEmbedding) {
-          queryEmbedding = await generateEmbedding(enhancedQuery);
+          // Check cache for persistent search too
+          const cachedEmbedding = getCachedQueryEmbedding(enhancedQuery);
+          if (cachedEmbedding) {
+            queryEmbedding = cachedEmbedding;
+          } else {
+            queryEmbedding = await generateEmbedding(enhancedQuery);
+            cacheQueryEmbedding(enhancedQuery, queryEmbedding);
+          }
         }
         const similarChunks = await searchSimilarChunks(queryEmbedding, 2);
         persistentChunks = similarChunks.filter((chunk) => chunk.similarity > 0.3);
@@ -313,21 +372,44 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     );
     console.log(`📝 Built ${intent} prompt (${finalPrompt.length} chars)`);
     
-    // Ensure model is loaded before generating
-    if (!isModelLoaded() && activeModel.localPath && activeModel.localPath.length > 0) {
-      console.log('🔄 Model not loaded, loading now...');
-      try {
-        await loadModel(activeModel);
-        console.log('✅ Model loaded successfully');
-      } catch (error) {
-        console.error('❌ Failed to load model:', error);
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        throw new Error(`Failed to load model: ${errorMsg}`);
-      }
-    } else if (!isModelLoaded()) {
-      throw new Error('Model not loaded and cannot load');
+    // ✅ CHUNK DEBUG: Log exactly what's in the prompt
+    if (docChunks.length > 0) {
+      console.log(`✅ CHUNK CONFIRMATION: ${docChunks.length} doc chunks included in prompt`);
+      docChunks.forEach((chunk, i) => {
+        console.log(`   [${i + 1}] Score: ${(chunk.combinedScore * 100).toFixed(0)}% | Text: "${chunk.text.substring(0, 80)}..."`);
+      });
+    } else if (defaultContext && defaultContext.trim().length > 0) {
+      console.log(`⚠️ No retrieval results, using default context fallback (${defaultContext.length} chars)`);
     } else {
-      console.log('✅ Model already loaded:', activeModel.name);
+      console.warn(`❌ WARNING: No chunks and no default context available!`);
+    }
+    
+    // ─── Inference backend selection ──────────────────────────────────────
+    if (isExpoMode) {
+      // Running in Expo Go — delegate to OpenAI API
+      const apiKey = getOpenAIKey();
+      if (!apiKey) {
+        throw new Error(
+          'OpenAI API key not configured. Add OPENAI_API_KEY to your .env file and restart the dev server.'
+        );
+      }
+    } else {
+      // Running as native build — ensure local model is loaded
+      if (!isModelLoaded() && activeModel.localPath && activeModel.localPath.length > 0) {
+        console.log('🔄 Model not loaded, loading now...');
+        try {
+          await loadModel(activeModel);
+          console.log('✅ Model loaded successfully');
+        } catch (error) {
+          console.error('❌ Failed to load model:', error);
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          throw new Error(`Failed to load model: ${errorMsg}`);
+        }
+      } else if (!isModelLoaded()) {
+        throw new Error('Model not loaded and cannot load');
+      } else {
+        console.log('✅ Model already loaded:', activeModel.name);
+      }
     }
 
     // Add user message
@@ -371,11 +453,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     try {
       console.log('🤖 Generating AI response with streaming...');
+      console.log('   Backend:', isExpoMode ? 'OpenAI API' : 'Local model');
       console.log('   Prompt:', finalPrompt.substring(0, 200) + (finalPrompt.length > 200 ? '...' : ''));
       console.log('   Prompt length:', finalPrompt.length, 'characters');
-      
+
+      // Choose inference backend
+      const apiKey = isExpoMode ? getOpenAIKey()! : null;
+      const generateFn = isExpoMode
+        ? (p: string, cb: (t: string) => void) => generateWithOpenAI(p, cb, apiKey!)
+        : generateText;
+
       // Generate AI response with streaming
-      await generateText(finalPrompt, (token: string) => {
+      await generateFn(finalPrompt, (token: string) => {
         try {
           // Log first token received
           if (totalTokensReceived === 0) {
@@ -478,7 +567,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const stopGenerating = () => {
     console.log('🛑 Stop button pressed');
-    stopGeneration();
+    if (!isExpoMode) {
+      stopGeneration();
+    }
     setIsGenerating(false);
   };
 
@@ -651,6 +742,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         hasEmbeddingModel,
         attachedDocumentData,
         isEmbeddingDocument,
+        isExpoMode,
         sendMessage,
         stopGenerating,
         clearMessages,

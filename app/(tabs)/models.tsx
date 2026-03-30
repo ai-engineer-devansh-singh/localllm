@@ -19,6 +19,7 @@ import {
     getStorageUsed,
     setActiveModel,
 } from '@/utils/modelManager';
+import { getOpenAIKey } from '@/utils/openaiService';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
@@ -29,10 +30,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ModelsScreen() {
   const insets = useSafeAreaInsets();
-  const { downloadedModels, activeModel, refreshModels, checkEmbeddingModel } = useChatContext();
+  const { downloadedModels, activeModel, refreshModels, checkEmbeddingModel, isExpoMode } = useChatContext();
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [storageUsed, setStorageUsed] = useState<number>(0);
+
+  // Whether the OpenAI key is present in the env config (Expo mode)
+  const [hasOpenAIKey, setHasOpenAIKey] = useState(false);
 
   // Embedding models state
   const [downloadedEmbeddingModels, setDownloadedEmbeddingModels] = useState<EmbeddingModel[]>([]);
@@ -42,6 +46,9 @@ export default function ModelsScreen() {
   useEffect(() => {
     loadStorageInfo();
     refreshEmbeddingModels();
+    if (isExpoMode) {
+      setHasOpenAIKey(!!getOpenAIKey());
+    }
   }, [downloadedModels]);
 
   const loadStorageInfo = async () => {
@@ -229,8 +236,41 @@ export default function ModelsScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>Chat Models</Text>
-        {AVAILABLE_MODELS.map((model, index) => {
+        {/* ── Expo Go banner ─────────────────────────────────────────── */}
+        {isExpoMode && (
+          <Animated.View entering={FadeInUp.duration(400)} style={styles.openAiCard}>
+            <View style={styles.openAiHeader}>
+              <View style={styles.openAiBadge}>
+                <Ionicons name="cloud" size={16} color="#10a37f" />
+              </View>
+              <View style={{ flex: 1, marginLeft: spacing.sm }}>
+                <Text style={styles.openAiTitle}>Expo Testing Mode</Text>
+                <Text style={styles.openAiSubtitle}>
+                  Local models are unavailable in Expo Go. Inference is handled by
+                  GPT-4o Mini via the OpenAI API key in your .env file.
+                </Text>
+              </View>
+            </View>
+            <View style={styles.keyActiveRow}>
+              <Ionicons
+                name={hasOpenAIKey ? 'checkmark-circle' : 'warning-outline'}
+                size={14}
+                color={hasOpenAIKey ? '#10a37f' : '#f59e0b'}
+              />
+              <Text style={[styles.keyActiveText, !hasOpenAIKey && { color: '#f59e0b' }]}>
+                {hasOpenAIKey
+                  ? 'OPENAI_API_KEY detected — ready to chat'
+                  : 'OPENAI_API_KEY missing — add it to .env and restart'}
+              </Text>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* ── Chat Models (hidden in Expo mode since they can't run) ──── */}
+        {!isExpoMode && (
+          <>
+            <Text style={styles.sectionTitle}>Chat Models</Text>
+            {AVAILABLE_MODELS.map((model, index) => {
           const downloaded = isDownloaded(model.id);
           const active = isActive(model.id);
           const downloading = downloadingModel === model.id;
@@ -322,6 +362,8 @@ export default function ModelsScreen() {
             </ModelCard>
           );
         })}
+          </>
+        )}
 
         <View style={styles.divider} />
         
@@ -496,5 +538,49 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     flex: 1,
+  },
+  // OpenAI card styles
+  openAiCard: {
+    backgroundColor: darkTheme.colors.surface,
+    borderRadius: 16,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 163, 127, 0.35)',
+  },
+  openAiHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  openAiBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(16, 163, 127, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  openAiTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: darkTheme.colors.onBackground,
+  },
+  openAiSubtitle: {
+    fontSize: 11,
+    color: darkTheme.colors.onSurfaceVariant,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  keyActiveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.xs,
+  },
+  keyActiveText: {
+    fontSize: 11,
+    color: '#10a37f',
+    fontWeight: '600',
   },
 });
